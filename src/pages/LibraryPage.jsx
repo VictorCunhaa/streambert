@@ -33,10 +33,10 @@ export default function LibraryPage({
   }, []);
 
   const sortLabels = {
-    manual: "Custom order",
+    manual: "Ordem personalizada",
     title: "A-Z",
-    rating: "Top rated",
-    year: "Newest first",
+    rating: "Mais bem avaliados",
+    year: "Mais recentes primeiro",
   };
 
   const getRating = useCallback(
@@ -51,15 +51,15 @@ export default function LibraryPage({
   return (
     <div className="fade-in">
       <div className="library-header">
-        <div className="library-title">My Library</div>
+        <div className="library-title">Minha Biblioteca</div>
         <div className="library-sub">
-          Watch history, progress, and saved titles
+          Histórico, progresso e títulos salvos
         </div>
       </div>
 
       {inProgress.length > 0 && (
         <div className="library-section">
-          <div className="library-section-title">Continue Watching</div>
+          <div className="library-section-title">Continuar Assistindo</div>
           <div className="cards-grid">
             {inProgress.map((item, i) => {
               const pk =
@@ -126,7 +126,7 @@ export default function LibraryPage({
 
       {history.length > 0 && (
         <div className="library-section">
-          <div className="library-section-title">Watch History</div>
+        <div className="library-section-title">Histórico</div>
           <div className="history-rows">
             {history.map((item, i) => {
               const pk =
@@ -162,7 +162,7 @@ export default function LibraryPage({
                       {item.media_type === "tv" &&
                         item.season &&
                         `S${item.season}E${item.episode} · `}
-                      {new Date(item.watchedAt).toLocaleDateString("en-US", {
+                      {new Date(item.watchedAt).toLocaleDateString("pt-BR", {
                         year: "numeric",
                         month: "short",
                         day: "numeric",
@@ -172,7 +172,7 @@ export default function LibraryPage({
                   <span
                     className={`search-result-type ${item.media_type === "tv" ? "type-tv" : "type-movie"}`}
                   >
-                    {item.media_type === "tv" ? "Series" : "Movie"}
+                    {item.media_type === "tv" ? "Série" : "Filme"}
                   </span>
                 </div>
               );
@@ -184,9 +184,9 @@ export default function LibraryPage({
       {history.length === 0 && saved.length === 0 && (
         <div className="empty-state">
           <EyeIcon />
-          <h3>Nothing here yet</h3>
+          <h3>Nada aqui ainda</h3>
           <p>
-            Start watching a movie or series and your history will appear here.
+            Comece a assistir um filme ou série e seu histórico aparecerá aqui.
           </p>
         </div>
       )}

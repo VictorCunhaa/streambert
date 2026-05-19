@@ -113,10 +113,10 @@ export default function HomePage({
     if (!apiKey || offline) return;
     const controller = new AbortController();
     Promise.all([
-      tmdbFetch("/movie/top_rated?page=1", apiKey, {
+      tmdbFetch("/movie/top_rated?page=1&region=BR", apiKey, {
         signal: controller.signal,
       }),
-      tmdbFetch("/tv/top_rated?page=1", apiKey, { signal: controller.signal }),
+      tmdbFetch("/tv/top_rated?page=1&region=BR", apiKey, { signal: controller.signal }),
     ])
       .then(([moviesData, tvData]) => {
         const movies = (moviesData.results || [])
@@ -168,18 +168,18 @@ export default function HomePage({
         >
           <div style={{ fontSize: 48 }}>📡</div>
           <div style={{ fontSize: 20, fontWeight: 600, color: "var(--text)" }}>
-            No internet connection
+            Sem conexão com a internet
           </div>
           <div style={{ fontSize: 14, color: "var(--text3)" }}>
-            Trending and search require an internet connection. Your downloads
-            and library still work offline.
+            Em alta e busca requerem conexão com a internet. Seus downloads
+            e biblioteca ainda funcionam offline.
           </div>
           <button
             className="btn btn-primary"
             style={{ marginTop: 8 }}
             onClick={onRetry}
           >
-            Retry
+            Tentar novamente
           </button>
         </div>
       )}
@@ -201,7 +201,7 @@ export default function HomePage({
           />
           <div className="hero-gradient" />
           <div className="hero-content">
-            <div className="hero-type">Trending · Movie</div>
+            <div className="hero-type">Em Alta · Filme</div>
             <div className="hero-title">{hero.title || hero.name}</div>
             <div className="hero-meta">
               <span className="hero-rating">
@@ -211,17 +211,17 @@ export default function HomePage({
             </div>
             <div className="hero-overview">{hero.overview}</div>
             <div className="hero-actions">
-              <button
+                <button
                 className="btn btn-primary"
                 onClick={() => onSelect(hero)}
               >
-                <PlayIcon /> Watch Now
+                <PlayIcon /> Assistir Agora
               </button>
               <button
                 className="btn btn-secondary"
                 onClick={() => onSelect(hero)}
               >
-                More Info
+                Mais Informações
               </button>
             </div>
           </div>
@@ -236,7 +236,7 @@ export default function HomePage({
           if (inProgress.length === 0) return null;
           return (
             <div key="continue" className="section">
-              <div className="section-title">Continue Watching</div>
+              <div className="section-title">Continuar Assistindo</div>
               <div className="cards-grid">
                 {inProgress.map((item) => {
                   const pk =
@@ -310,7 +310,7 @@ export default function HomePage({
           if (viewMode === "list")
             return renderList(
               "similar",
-              "Similar to",
+              "Similar a",
               similarSource.title || similarSource.name,
               similarItems,
             );
@@ -318,7 +318,7 @@ export default function HomePage({
             <TrendingCarousel
               key="similar"
               items={similarItems}
-              title="Similar to"
+              title="Similar a"
               titleHighlight={similarSource.title || similarSource.name}
               onSelect={onSelect}
               ratingsMap={enrichedRatingsMap}
@@ -331,7 +331,7 @@ export default function HomePage({
           if (viewMode === "list")
             return renderList(
               "trendingMovies",
-              "Trending Movies",
+              "Em Alta - Filmes",
               null,
               trendingMovieItems,
             );
@@ -339,7 +339,7 @@ export default function HomePage({
             <TrendingCarousel
               key="trendingMovies"
               items={trendingMovieItems}
-              title="Trending Movies"
+              title="Em Alta - Filmes"
               onSelect={onSelect}
               ratingsMap={enrichedRatingsMap}
             />
@@ -351,7 +351,7 @@ export default function HomePage({
           if (viewMode === "list")
             return renderList(
               "trendingTV",
-              "Trending Series",
+              "Em Alta - Séries",
               null,
               trendingTVItems,
             );
@@ -359,7 +359,7 @@ export default function HomePage({
             <TrendingCarousel
               key="trendingTV"
               items={trendingTVItems}
-              title="Trending Series"
+              title="Em Alta - Séries"
               onSelect={onSelect}
               ratingsMap={enrichedRatingsMap}
             />
@@ -369,12 +369,12 @@ export default function HomePage({
         if (id === "topRated") {
           if (topRatedItems.length === 0) return null;
           if (viewMode === "list")
-            return renderList("topRated", "Top Rated", null, topRatedItems);
+            return renderList("topRated", "Mais Bem Avaliados", null, topRatedItems);
           return (
             <TrendingCarousel
               key="topRated"
               items={topRatedItems}
-              title="Top Rated"
+              title="Mais Bem Avaliados"
               onSelect={onSelect}
               ratingsMap={enrichedRatingsMap}
             />

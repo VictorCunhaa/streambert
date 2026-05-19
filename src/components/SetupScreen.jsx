@@ -45,28 +45,28 @@ function errorMessage(reason, status) {
   switch (reason) {
     case "invalid_token":
       return {
-        title: "Invalid token",
-        body: "TMDB rejected the token (401 Unauthorized). Make sure you copied the long JWT Read Access Token, not the shorter API Key.",
+        title: "Token inválido",
+        body: "O TMDB rejeitou o token (401 Unauthorized). Certifique-se de copiar o Token de Acesso de Leitura JWT longo, não a API Key mais curta.",
       };
     case "forbidden":
       return {
-        title: "Access denied",
-        body: "TMDB returned 403 Forbidden. Your account may be suspended or the token may have been revoked.",
+        title: "Acesso negado",
+        body: "O TMDB retornou 403 Forbidden. Sua conta pode estar suspensa ou o token pode ter sido revogado.",
       };
     case "timeout":
       return {
-        title: "Request timed out",
-        body: "TMDB took too long to respond. Check your internet connection and try again.",
+        title: "Tempo de requisição esgotado",
+        body: "O TMDB demorou muito para responder. Verifique sua conexão com a internet e tente novamente.",
       };
     case "unreachable":
       return {
-        title: "Cannot reach TMDB",
-        body: "No connection to api.themoviedb.org. Check your internet connection.",
+        title: "Não foi possível conectar ao TMDB",
+        body: "Sem conexão com api.themoviedb.org. Verifique sua conexão com a internet.",
       };
     default:
       return {
-        title: "Something went wrong",
-        body: `TMDB returned an unexpected error${status ? ` (HTTP ${status})` : ""}. Try again in a moment.`,
+        title: "Algo deu errado",
+        body: `O TMDB retornou um erro inesperado${status ? ` (HTTP ${status})` : ""}. Tente novamente em instantes.`,
       };
   }
 }
@@ -123,29 +123,29 @@ export default function SetupScreen({ onSave, onSkip }) {
         </div>
         <div className="apikey-title">STREAMBERT</div>
         <p className="apikey-sub">
-          Enter your <strong>free</strong> TMDB{" "}
-          <strong>Read Access Token</strong> to get started.
+          Digite seu <strong>gratuito</strong> TMDB{" "}
+          <strong>Token de Acesso de Leitura</strong> para começar.
           <br />
-          Go to{" "}
+          Acesse{" "}
           <ExternalLink
             className="apikey-link"
             href="https://www.themoviedb.org/settings/api"
           >
-            themoviedb.org → Settings → API
+            themoviedb.org → Configurações → API
           </ExternalLink>{" "}
-          and copy the <em>API Read Access Token</em> (the long JWT, not the
-          shorter API Key below).
+          e copie o <em>API Read Access Token</em> (o JWT longo, não a API Key
+          mais curta abaixo).
           <br />
           <ExternalLink
             className="apikey-link"
             href="https://github.com/truelockmc/streambert/blob/main/tmdb-tutorial.md"
           >
-            Step-by-step guide on how to get that Token
+            Guia passo a passo de como obter o Token
           </ExternalLink>
         </p>
         <input
           className={`apikey-input${error ? " apikey-input-error" : ""}`}
-          placeholder="Paste your TMDB Read Access Token (eyJ...)..."
+          placeholder="Cole seu Token de Acesso de Leitura TMDB (eyJ...)..."
           value={key}
           onChange={(e) => {
             setKey(e.target.value);
@@ -181,11 +181,11 @@ export default function SetupScreen({ onSave, onSkip }) {
         >
           {checking ? (
             <>
-              <span className="apikey-spinner" /> Checking…
+              <span className="apikey-spinner" /> Verificando…
             </>
           ) : (
             <>
-              <PlayIcon /> Let's go
+              <PlayIcon /> Vamos lá
             </>
           )}
         </button>
@@ -208,7 +208,7 @@ export default function SetupScreen({ onSave, onSkip }) {
             onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text2)")}
             onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text3)")}
           >
-            Skip for now
+            Pular por agora
           </button>
         )}
       </div>

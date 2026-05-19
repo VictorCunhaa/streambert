@@ -1,12 +1,12 @@
 // Keyboard Shortcuts reference modal
 export default function KeyboardShortcutsModal({ onClose }) {
   const shortcuts = [
-    { keys: ["Ctrl", "F"], desc: "Open search" },
-    { keys: ["Ctrl", "K"], desc: "Search on a page" },
-    { keys: ["Esc"], desc: "Close search / modal" },
-    { keys: ["Ctrl", "Z"], desc: "Navigate back" },
-    { keys: ["Ctrl", "R"], desc: "Reload app" },
-    { keys: ["?"], desc: "Show this shortcuts overview" },
+    { keys: ["Ctrl", "F"], desc: "Abrir busca" },
+    { keys: ["Ctrl", "K"], desc: "Buscar na página" },
+    { keys: ["Esc"], desc: "Fechar busca / modal" },
+    { keys: ["Ctrl", "Z"], desc: "Voltar" },
+    { keys: ["Ctrl", "R"], desc: "Recarregar app" },
+    { keys: ["?"], desc: "Mostrar esta visão de atalhos" },
   ];
 
   return (
@@ -53,7 +53,7 @@ export default function KeyboardShortcutsModal({ onClose }) {
               color: "var(--text)",
             }}
           >
-            KEYBOARD SHORTCUTS
+            ATALHOS DO TECLADO
           </div>
           <button
             onClick={onClose}
@@ -146,10 +146,10 @@ export default function KeyboardShortcutsModal({ onClose }) {
                 marginBottom: 2,
               }}
             >
-              Need help or found a bug?
+              Precisa de ajuda ou encontrou um bug?
             </div>
             <div style={{ fontSize: 12, color: "var(--text3)" }}>
-              Open an issue or browse the README on GitHub
+              Abra uma issue ou navegue pelo README no GitHub
             </div>
           </div>
           <a
@@ -191,7 +191,7 @@ export default function KeyboardShortcutsModal({ onClose }) {
             textAlign: "center",
           }}
         >
-          Press{" "}
+          Pressione{" "}
           <kbd
             style={{
               fontSize: 11,
@@ -202,8 +202,8 @@ export default function KeyboardShortcutsModal({ onClose }) {
             }}
           >
             ?
-          </kbd>{" "}
-          or{" "}
+          </kbd>          {" "}
+          ou{" "}
           <kbd
             style={{
               fontSize: 11,
@@ -214,8 +214,8 @@ export default function KeyboardShortcutsModal({ onClose }) {
             }}
           >
             Esc
-          </kbd>{" "}
-          to close
+          </kbd>          {" "}
+          para fechar
         </div>
       </div>
     </div>

@@ -556,7 +556,7 @@ export default function UpdateModal({
                     letterSpacing: 1,
                   }}
                 >
-                  UPDATE AVAILABLE
+                  ATUALIZAÇÃO DISPONÍVEL
                 </span>
               </div>
               <div
@@ -591,7 +591,7 @@ export default function UpdateModal({
                 >
                   v{latest} ↗
                 </a>
-                is ready to install
+                está pronto para instalar
                 {format && (
                   <span
                     style={{
@@ -646,7 +646,7 @@ export default function UpdateModal({
                   marginBottom: 12,
                 }}
               >
-                What's New
+                O que Há de Novo
               </div>
               <div>{renderChangelog(changelog)}</div>
             </>
@@ -658,7 +658,7 @@ export default function UpdateModal({
                 fontStyle: "italic",
               }}
             >
-              No changelog available.
+              Sem changelog disponível.
             </div>
           )}
         </div>
@@ -684,7 +684,7 @@ export default function UpdateModal({
               }}
             >
               ⚠ {activeDownloads} download{activeDownloads > 1 ? "s" : ""}{" "}
-              running, finish or cancel them before updating.
+              em andamento, finalize ou cancele-os antes de atualizar.
             </div>
           )}
 
@@ -693,7 +693,7 @@ export default function UpdateModal({
             <div
               style={{ fontSize: 12, color: "var(--text3)", marginBottom: 12 }}
             >
-              Could not detect install format. Use the{" "}
+              Não foi possível detectar o formato de instalação. Use a{" "}
               <a
                 href={url}
                 onClick={(e) => {
@@ -702,9 +702,9 @@ export default function UpdateModal({
                 }}
                 style={{ color: "var(--red)", cursor: "pointer" }}
               >
-                GitHub releases page
+                página de releases do GitHub
               </a>{" "}
-              to download manually.
+              para baixar manualmente.
             </div>
           )}
 
@@ -723,8 +723,8 @@ export default function UpdateModal({
                 <span>
                   {progressLabel ||
                     (phase === "downloading"
-                      ? "Downloading update…"
-                      : "Installing…")}
+                      ? "Baixando atualização…"
+                      : "Instalando…")}
                 </span>
                 {phase === "downloading" && (
                   <span>{Math.round(progress)}%</span>
@@ -783,14 +783,14 @@ export default function UpdateModal({
           {/* Done */}
           {phase === "done" && (
             <div style={{ fontSize: 13, color: "#48c774", marginBottom: 12 }}>
-              ✓ Update downloaded, installer is running
+              ✓ Atualização baixada, instalador em execução
             </div>
           )}
 
           {/* Buttons */}
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
             <button className="btn btn-ghost" onClick={handleCancel}>
-              {phase === "downloading" ? "Cancel" : "Close"}
+              {phase === "downloading" ? "Cancelar" : "Fechar"}
             </button>
             {phase === "idle" && (
               <>
@@ -831,7 +831,7 @@ export default function UpdateModal({
                     cursor: canInstall ? "pointer" : "not-allowed",
                   }}
                 >
-                  Install Update
+                  Instalar Atualização
                 </button>
               </>
             )}

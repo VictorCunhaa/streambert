@@ -474,8 +474,8 @@ export default function App() {
     }
     setLoadingHome(true);
     Promise.all([
-      tmdbFetch("/trending/movie/week", apiKey),
-      tmdbFetch("/trending/tv/week", apiKey),
+      tmdbFetch("/trending/movie/week?region=BR", apiKey),
+      tmdbFetch("/trending/tv/week?region=BR", apiKey),
     ])
       .then(([m, t]) => {
         const movies = m.results || [];

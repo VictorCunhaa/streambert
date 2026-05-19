@@ -109,21 +109,21 @@ export default function Sidebar({
       </div>
 
       {canGoBack && (
-        <SideBtn onClick={onBack} icon={<BackIcon />} label="Back (Ctrl+Z)" />
+        <SideBtn onClick={onBack} icon={<BackIcon />} label="Voltar (Ctrl+Z)" />
       )}
 
-      <SideBtn onClick={onSearch} icon={<SearchIcon />} label="Search  (⌘F)" />
+      <SideBtn onClick={onSearch} icon={<SearchIcon />} label="Buscar  (⌘F)" />
       <SideBtn
         active={page === "home"}
         onClick={() => onNavigate("home")}
         icon={<HomeIcon />}
-        label="Home"
+        label="Início"
       />
       <SideBtn
         active={page === "history"}
         onClick={() => onNavigate("history")}
         icon={<HistoryIcon />}
-        label="Library & History"
+        label="Biblioteca e Histórico"
       />
       <SideBtn
         active={page === "downloads"}
@@ -207,7 +207,7 @@ export default function Sidebar({
               setContextMenu(null);
             }}
           >
-            Remove
+            Remover
           </div>
         </div>
       )}
@@ -216,22 +216,22 @@ export default function Sidebar({
         <SideBtn
           onClick={onShowShortcuts}
           icon={<HelpIcon />}
-          label="Help & Shortcuts (?)"
+          label="Ajuda e Atalhos (?)"
         />
         <SideBtn
           active={page === "settings"}
           onClick={() => onNavigate("settings")}
           icon={<SettingsIcon />}
-          label="Settings"
+          label="Configurações"
         />
         <button
           className="sidebar-btn"
           onClick={() => window.electron?.quitApp?.()}
-          title="Quit App"
+          title="Fechar App"
           style={{ color: "#e53e3e", marginTop: 4 }}
         >
           <QuitIcon />
-          <span className="tooltip">Quit App</span>
+          <span className="tooltip">Fechar App</span>
         </button>
       </div>
     </div>

@@ -42,7 +42,11 @@ function _releaseSlot() {
 }
 
 export const tmdbFetch = async (path, apiKey) => {
-  const cacheKey = `${apiKey}|${path}`;
+  // Inject language=pt-BR into all content requests (not auth endpoints)
+  const separator = path.includes("?") ? "&" : "?";
+  const localizedPath = `${path}${separator}language=pt-BR`;
+
+  const cacheKey = `${apiKey}|${localizedPath}`;
   const cached = _tmdbCache.get(cacheKey);
   if (cached && Date.now() < cached.expiresAt) return cached.data;
 
@@ -50,7 +54,7 @@ export const tmdbFetch = async (path, apiKey) => {
 
   let res;
   try {
-    res = await fetch(`${TMDB_BASE}${path}`, {
+    res = await fetch(`${TMDB_BASE}${localizedPath}`, {
       headers: { Authorization: `Bearer ${apiKey}` },
     });
   } catch {
