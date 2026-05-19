@@ -130,6 +130,36 @@ function setupSession(playerSession, trailerSession) {
     stripHeaders,
   );
 
+  // Inject Referer and Sec-Fetch-Dest for providers that validate these server-side.
+  // SuperflixAPI and Pomfy return their block page when Sec-Fetch-Dest is "document"
+  // (which is what Electron webview sends). Setting it to "iframe" makes the server
+  // respond with the actual player instead.
+  const SPOOF_AS_IFRAME = [
+    "*://superflixapi.best/*",
+    "*://api.pomfy.stream/*",
+  ];
+  const SPOOF_REFERERS = {
+    "superflixapi.best": "https://superflixapi.best/",
+    "api.pomfy.stream": "https://pomfy.stream/",
+  };
+  playerSession.webRequest.onBeforeSendHeaders(
+    { urls: SPOOF_AS_IFRAME },
+    (details, callback) => {
+      const headers = { ...details.requestHeaders };
+      try {
+        const host = new URL(details.url).hostname;
+        const referer = SPOOF_REFERERS[host];
+        if (referer && !headers["Referer"] && !headers["referer"]) {
+          headers["Referer"] = referer;
+        }
+      } catch {}
+      headers["Sec-Fetch-Dest"] = "iframe";
+      headers["Sec-Fetch-Mode"] = "navigate";
+      headers["Sec-Fetch-Site"] = "cross-site";
+      callback({ requestHeaders: headers });
+    },
+  );
+
   // Trailer: block ads only (no media intercept needed)
   trailerSession.webRequest.onBeforeRequest({ urls: BLOCKED_HOSTS }, (_, cb) =>
     cb({ cancel: true }),

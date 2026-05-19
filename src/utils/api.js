@@ -122,6 +122,26 @@ export const PLAYER_SOURCES = [
       `https://www.2embed.online/embed/tv/${id}/${season}/${ep}`,
   },
   {
+    id: "pomfy",
+    label: "Pomfy",
+    tag: null,
+    note: "PT-BR",
+    supportsProgress: true,
+    movieUrl: (id) => `https://api.pomfy.stream/filme/${id}`,
+    tvUrl: (id, season, ep) =>
+      `https://api.pomfy.stream/serie/${id}/${season}/${ep}`,
+  },
+  {
+    id: "superflixapi",
+    label: "SuperflixAPI",
+    tag: "ANIME",
+    note: "PT-BR",
+    supportsProgress: true,
+    movieUrl: (id) => `https://superflixapi.best/filme/${id}`,
+    tvUrl: (id, season, ep) =>
+      `https://superflixapi.best/serie/${id}/${season}/${ep}`,
+  },
+  {
     id: "allmanga",
     label: "AllManga",
     tag: "ANIME",
@@ -150,6 +170,10 @@ export const sourceIsAsync = (sourceId) =>
 
 // Sources that require a transparent webRequest intercept to load properly
 export const NEEDS_INTERCEPT = ["vidsrc", "2embed"];
+
+// Sources that must NOT have the sandbox attribute on the webview — they detect
+// sandbox via window.frameElement.hasAttribute('sandbox') and block playback.
+export const NO_SANDBOX = ["superflixapi", "pomfy"];
 
 // ── AniList API (anime metadata) ──────────────────────────────────────────────
 const ANILIST_API = "https://graphql.anilist.co";

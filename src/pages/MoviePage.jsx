@@ -21,6 +21,7 @@ import {
   ANIME_DEFAULT_SOURCE,
   NON_ANIME_DEFAULT_SOURCE,
   NEEDS_INTERCEPT,
+  NO_SANDBOX,
 } from "../utils/api";
 import {
   PlayIcon,
@@ -566,6 +567,19 @@ export default function MoviePage({
     };
   }, [playing, playerSource]);
 
+  // Some providers (superflixapi, pomfy) detect the sandbox attribute via
+  // window.frameElement.hasAttribute('sandbox') and block playback.
+  // Remove it from the DOM directly to ensure it's truly absent.
+  useEffect(() => {
+    const wv = webviewRef.current;
+    if (!wv) return;
+    if (NO_SANDBOX.includes(playerSource)) {
+      wv.removeAttribute("sandbox");
+    } else {
+      wv.setAttribute("sandbox", "allow-scripts allow-same-origin allow-forms");
+    }
+  }, [playerSource]);
+
   // ── PiP pop-out: navigate main webview away so only one stream is active ──
   useEffect(() => {
     if (!playing) return;
@@ -896,6 +910,7 @@ export default function MoviePage({
               </div>
             )}
             <webview
+              key={NO_SANDBOX.includes(playerSource) ? "nosandbox" : "sandbox"}
               ref={webviewRef}
               src={
                 pipOpen
@@ -906,7 +921,11 @@ export default function MoviePage({
               }
               partition="persist:player"
               allowpopups="false"
-              sandbox="allow-scripts allow-same-origin allow-forms"
+              sandbox={
+                NO_SANDBOX.includes(playerSource)
+                  ? undefined
+                  : "allow-scripts allow-same-origin allow-forms"
+              }
               style={{
                 position: "absolute",
                 inset: 0,
