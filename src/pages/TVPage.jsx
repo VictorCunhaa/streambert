@@ -1040,6 +1040,7 @@ export default function TVPage({
   // Attach webview load events so we know when the new source has painted.
   // Also poll for video duration so AniSkip markers appear without waiting for the progress tick.
   // For progressViaFrames providers, also resume playback at the last saved time.
+  // Also inject CSS to hide the cast/remote-playback button (not supported in Electron).
   useEffect(() => {
     if (!playing) return;
     const wv = webviewRef.current;
@@ -1067,6 +1068,40 @@ export default function TVPage({
         }
       } catch {}
     }, 1000);
+
+    const HIDE_CAST_CSS = [
+      /* native Chromium remote-playback picker button */
+      "video::-webkit-media-controls-wireless-playback-picker-button { display: none !important; }",
+      /* VideoJS cast control (title="Transmitir") */
+      ".vjs-cast-control,",
+      /* other common player cast/airplay buttons */
+      ".plyr__controls__item.plyr__control[data-plyr='airplay'],",
+      ".plyr__controls__item.plyr__control[data-plyr='cast'],",
+      ".jw-icon-airplay, .jw-icon-cast,",
+      ".vjs-airplay-button, .vjs-cast-button,",
+      "button[title='Transmitir'], button[title='Cast'], button[title='Airplay'],",
+      "button[aria-label='Transmitir'], button[aria-label='Cast'], button[aria-label='Airplay']",
+      "{ display: none !important; }",
+    ].join("\n");
+
+    const doInjectCss = async () => {
+      try {
+        await window.electron?.injectCssAllFrames?.(
+          wv.getWebContentsId(),
+          HIDE_CAST_CSS,
+        );
+      } catch {}
+    };
+
+    const onLoadCss = () => {
+      if (progressViaFrames) {
+        setTimeout(doInjectCss, 1500);
+        setTimeout(doInjectCss, 4000);
+      } else {
+        try { wv.insertCSS(HIDE_CAST_CSS); } catch {}
+      }
+    };
+    wv.addEventListener("did-finish-load", onLoadCss);
 
     // Resume at saved position for progressViaFrames providers.
     // Poll for up to 30s because the inner player loads asynchronously.
@@ -1100,6 +1135,7 @@ export default function TVPage({
       resumeCleared = true;
       wv.removeEventListener("did-finish-load", done);
       wv.removeEventListener("did-fail-load", done);
+      wv.removeEventListener("did-finish-load", onLoadCss);
       wv.removeEventListener("did-finish-load", onLoad);
       clearInterval(pollDuration);
     };

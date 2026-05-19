@@ -492,6 +492,97 @@ function register(getMainWindow, { writeSecretMigration }) {
       return false;
     }
   });
+
+  // ── Inject CSS into all frames of a webview ───────────────────────────────
+  // Used to hide UI elements (e.g. the cast/remote-playback button) that don't
+  // work inside Electron, across nested iframes where insertCSS on the root
+  // frame doesn't reach.
+  ipcMain.handle("inject-css-all-frames", async (_, { webContentsId, css }) => {
+    try {
+      const { webContents } = require("electron");
+      const wc = webContents.fromId(webContentsId);
+      if (!wc || wc.isDestroyed()) return;
+
+      const allFrames = [];
+      const collect = (frame) => {
+        allFrames.push(frame);
+        for (const child of frame.frames || []) collect(child);
+      };
+      collect(wc.mainFrame);
+
+      for (const frame of allFrames) {
+        try {
+          await frame.executeJavaScript(`
+            (() => {
+              if (document.getElementById('__sc_inject')) return;
+              const s = document.createElement('style');
+              s.id = '__sc_inject';
+              s.textContent = ${JSON.stringify(css)};
+              (document.head || document.documentElement).appendChild(s);
+            })()
+          `);
+        } catch {}
+      }
+    } catch {}
+  });
+
+  // ── Debug: find cast button across frames ─────────────────────────────────
+  ipcMain.handle("find-cast-button", async (_, { webContentsId }) => {
+    try {
+      const { webContents } = require("electron");
+      const wc = webContents.fromId(webContentsId);
+      if (!wc || wc.isDestroyed()) return [];
+
+      const allFrames = [];
+      const collect = (frame) => {
+        allFrames.push(frame);
+        for (const child of frame.frames || []) collect(child);
+      };
+      collect(wc.mainFrame);
+
+      const results = [];
+      for (let i = 0; i < allFrames.length; i++) {
+        try {
+          const found = await allFrames[i].executeJavaScript(`
+            (() => {
+              const keywords = ['transmitir','cast','airplay','wireless','remote'];
+              const all = document.querySelectorAll('*');
+              const matches = [];
+              for (const el of all) {
+                const title = (el.title || el.getAttribute('aria-label') || el.getAttribute('data-tooltip') || '').toLowerCase();
+                if (keywords.some(k => title.includes(k))) {
+                  const path = [];
+                  let node = el;
+                  while (node && node !== document.body) {
+                    let sel = node.tagName.toLowerCase();
+                    if (node.id) sel += '#' + node.id;
+                    if (node.className && typeof node.className === 'string')
+                      sel += '.' + node.className.trim().split(/\\s+/).join('.');
+                    path.unshift(sel);
+                    node = node.parentElement;
+                  }
+                  matches.push({
+                    tag: el.tagName,
+                    title: el.title,
+                    ariaLabel: el.getAttribute('aria-label'),
+                    className: el.className,
+                    id: el.id,
+                    outerHTML: el.outerHTML.slice(0, 300),
+                    path: path.join(' > '),
+                  });
+                }
+              }
+              return matches;
+            })()
+          `);
+          if (found && found.length) results.push({ frameIndex: i, found });
+        } catch {}
+      }
+      return results;
+    } catch {
+      return [];
+    }
+  });
 }
 
 module.exports = { register };

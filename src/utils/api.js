@@ -170,7 +170,7 @@ export const sourceIsAsync = (sourceId) =>
   PLAYER_SOURCES.find((s) => s.id === sourceId)?.async ?? false;
 
 // Sources that require a transparent webRequest intercept to load properly
-export const NEEDS_INTERCEPT = ["vidsrc", "2embed"];
+export const NEEDS_INTERCEPT = ["vidsrc", "2embed", "superflixapi", "embedmovies"];
 
 // Sources that must NOT have the sandbox attribute on the webview — they detect
 // sandbox via window.frameElement.hasAttribute('sandbox') and block playback.

@@ -425,6 +425,8 @@ export default function MoviePage({
   // Attach webview load events so we know when the new source has painted.
   // For progressViaFrames providers, also resume playback at the last saved time
   // once the video element becomes ready (poll briefly after load).
+  // Also inject CSS to hide the cast/remote-playback button which doesn't work
+  // in Electron (no OS-level discovery for Chromecast/Miracast/AirPlay).
   useEffect(() => {
     if (!playing) return;
     const wv = webviewRef.current;
@@ -433,13 +435,50 @@ export default function MoviePage({
     wv.addEventListener("did-finish-load", done);
     wv.addEventListener("did-fail-load", done);
 
+    const HIDE_CAST_CSS = [
+      /* native Chromium remote-playback picker button */
+      "video::-webkit-media-controls-wireless-playback-picker-button { display: none !important; }",
+      /* VideoJS cast control (title="Transmitir") */
+      ".vjs-cast-control,",
+      /* other common player cast/airplay buttons */
+      ".plyr__controls__item.plyr__control[data-plyr='airplay'],",
+      ".plyr__controls__item.plyr__control[data-plyr='cast'],",
+      ".jw-icon-airplay, .jw-icon-cast,",
+      ".vjs-airplay-button, .vjs-cast-button,",
+      "button[title='Transmitir'], button[title='Cast'], button[title='Airplay'],",
+      "button[aria-label='Transmitir'], button[aria-label='Cast'], button[aria-label='Airplay']",
+      "{ display: none !important; }",
+    ].join("\n");
+
+    const doInjectCss = async () => {
+      try {
+        await window.electron?.injectCssAllFrames?.(
+          wv.getWebContentsId(),
+          HIDE_CAST_CSS,
+        );
+      } catch {}
+    };
+
+    const onLoad = () => {
+      if (progressViaFrames) {
+        // Inject at 1.5s and again at 4s — the inner player frame loads async
+        // and may not exist yet at the first injection.
+        setTimeout(doInjectCss, 1500);
+        setTimeout(doInjectCss, 4000);
+      } else {
+        // Direct webview — insertCSS works fine
+        try { wv.insertCSS(HIDE_CAST_CSS); } catch {}
+      }
+    };
+    wv.addEventListener("did-finish-load", onLoad);
+
     // Resume at saved position for progressViaFrames providers.
     // The video element may not exist immediately after did-finish-load (the
     // inner player loads asynchronously), so we poll for up to 30s.
     let resumeCleared = false;
     let resumeAttempts = 0;
     const savedTime = storage.get("dlTime_" + progressKey) || 0;
-    const onLoad = () => {
+    const onLoadResume = () => {
       if (!progressViaFrames || savedTime < 3 || resumeCleared) return;
       const trySeek = async () => {
         if (resumeCleared) return;
@@ -458,13 +497,14 @@ export default function MoviePage({
       };
       setTimeout(trySeek, 2000);
     };
-    wv.addEventListener("did-finish-load", onLoad);
+    wv.addEventListener("did-finish-load", onLoadResume);
 
     return () => {
       resumeCleared = true;
       wv.removeEventListener("did-finish-load", done);
       wv.removeEventListener("did-fail-load", done);
       wv.removeEventListener("did-finish-load", onLoad);
+      wv.removeEventListener("did-finish-load", onLoadResume);
     };
   }, [playing, playerSource, item.id]);
 
