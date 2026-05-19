@@ -427,7 +427,7 @@ function register(getMainWindow, { writeSecretMigration }) {
       const JS = `
         (() => {
           const v = document.querySelector('video');
-          if (!v || !v.duration || v.duration === Infinity || v.paused) return null;
+          if (!v || !v.duration || v.duration === Infinity) return null;
           if (!v._seekTracked) {
             v._seekTracked = true;
             v.addEventListener('seeked', () => {
@@ -453,6 +453,43 @@ function register(getMainWindow, { writeSecretMigration }) {
       return null;
     } catch {
       return null;
+    }
+  });
+
+  // ── Seek video to a time across all webview frames ────────────────────────
+  // Used to resume playback at the last saved position for providers whose
+  // <video> element lives inside nested iframes (progressViaFrames providers).
+  ipcMain.handle("seek-video-in-frames", async (_, { webContentsId, time }) => {
+    try {
+      const { webContents } = require("electron");
+      const wc = webContents.fromId(webContentsId);
+      if (!wc || wc.isDestroyed()) return false;
+
+      const allFrames = [];
+      const collect = (frame) => {
+        allFrames.push(frame);
+        for (const child of frame.frames || []) collect(child);
+      };
+      collect(wc.mainFrame);
+
+      const JS = `
+        (() => {
+          const v = document.querySelector('video');
+          if (!v || !v.duration || v.duration === Infinity) return false;
+          v.currentTime = ${Number(time)};
+          return true;
+        })()
+      `;
+
+      for (const frame of allFrames) {
+        try {
+          const ok = await frame.executeJavaScript(JS);
+          if (ok) return true;
+        } catch {}
+      }
+      return false;
+    } catch {
+      return false;
     }
   });
 }

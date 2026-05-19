@@ -138,6 +138,11 @@ export default function MoviePage({
   const progressKey = `movie_${item.id}`;
   const pct = progress[progressKey] || 0;
   const isWatched = !!watched?.[progressKey];
+  // Live current-time state so the progress label updates every tick without
+  // waiting for pct (integer %) to change.
+  const [liveTimeSecs, setLiveTimeSecs] = useState(
+    () => storage.get("dlTime_" + progressKey) || 0,
+  );
   const hasProgress = pct > 0;
 
   // ── Derived display values (must be declared before any callbacks that use them) ──
@@ -147,7 +152,7 @@ export default function MoviePage({
   const mediaName = `${title}${year ? " (" + year + ")" : ""}`;
 
   const { watchedSecs, totalSecs, displayPct, progressLabel } = useMemo(() => {
-    const watchedSecs = storage.get("dlTime_" + progressKey) || 0;
+    const watchedSecs = liveTimeSecs;
     const totalSecs = d?.runtime ? d.runtime * 60 : 0;
     const derivedPct =
       watchedSecs > 0 && totalSecs > 0
@@ -171,7 +176,7 @@ export default function MoviePage({
             ? `${displayPct}%`
             : null;
     return { watchedSecs, totalSecs, displayPct, progressLabel };
-  }, [progressKey, pct, d?.runtime]);
+  }, [progressKey, pct, d?.runtime, liveTimeSecs]);
 
   // Read threshold from settings (default 20s), stable across renders
   const [watchedThreshold] = useState(
@@ -417,7 +422,9 @@ export default function MoviePage({
     };
   }, []);
 
-  // Attach webview load events so we know when the new source has painted
+  // Attach webview load events so we know when the new source has painted.
+  // For progressViaFrames providers, also resume playback at the last saved time
+  // once the video element becomes ready (poll briefly after load).
   useEffect(() => {
     if (!playing) return;
     const wv = webviewRef.current;
@@ -425,13 +432,43 @@ export default function MoviePage({
     const done = () => setWebviewLoading(false);
     wv.addEventListener("did-finish-load", done);
     wv.addEventListener("did-fail-load", done);
+
+    // Resume at saved position for progressViaFrames providers.
+    // The video element may not exist immediately after did-finish-load (the
+    // inner player loads asynchronously), so we poll for up to 30s.
+    let resumeCleared = false;
+    let resumeAttempts = 0;
+    const savedTime = storage.get("dlTime_" + progressKey) || 0;
+    const onLoad = () => {
+      if (!progressViaFrames || savedTime < 3 || resumeCleared) return;
+      const trySeek = async () => {
+        if (resumeCleared) return;
+        resumeAttempts++;
+        try {
+          const ok = await window.electron?.seekVideoInFrames?.(
+            wv.getWebContentsId(),
+            savedTime,
+          );
+          if (ok || resumeAttempts >= 20) resumeCleared = true;
+          else setTimeout(trySeek, 1500);
+        } catch {
+          if (resumeAttempts < 20) setTimeout(trySeek, 1500);
+          else resumeCleared = true;
+        }
+      };
+      setTimeout(trySeek, 2000);
+    };
+    wv.addEventListener("did-finish-load", onLoad);
+
     return () => {
+      resumeCleared = true;
       wv.removeEventListener("did-finish-load", done);
       wv.removeEventListener("did-fail-load", done);
+      wv.removeEventListener("did-finish-load", onLoad);
     };
   }, [playing, playerSource, item.id]);
 
-  // ── Auto-track progress + auto-watched every 5s ──────────────────────────
+  // ── Auto-track progress + auto-watched every 3s ──────────────────────────
   useEffect(() => {
     if (!playing || !sourceSupportsProgress(playerSource)) return;
     let interval = null;
@@ -458,7 +495,7 @@ export default function MoviePage({
             result = await wv.executeJavaScript(`
               (() => {
                 const v = document.querySelector('video')
-                if (!v || !v.duration || v.duration === Infinity || v.paused) return null
+                if (!v || !v.duration || v.duration === Infinity) return null
                 // Re-attach seek tracker if video element was recreated (e.g. quality change)
                 if (!v._seekTracked) {
                   v._seekTracked = true
@@ -516,7 +553,9 @@ export default function MoviePage({
             const p = Math.floor((ct / result.duration) * 100);
             saveProgressRef.current(progressKey, Math.min(p, 100));
             // Also persist actual seconds so DownloadsPage can show resume position
-            storage.set("dlTime_" + progressKey, Math.floor(ct));
+            const ctFloor = Math.floor(ct);
+            storage.set("dlTime_" + progressKey, ctFloor);
+            setLiveTimeSecs(ctFloor);
 
             // Auto-mark watched when remaining time ≤ threshold
             const remaining = result.duration - ct;
@@ -530,7 +569,7 @@ export default function MoviePage({
             }
           }
         } catch {}
-      }, 5000);
+      }, 3000);
     }, 3000);
     return () => {
       clearTimeout(timer);

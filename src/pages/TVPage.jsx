@@ -1038,7 +1038,8 @@ export default function TVPage({
   }, []);
 
   // Attach webview load events so we know when the new source has painted.
-  // Also poll for video duration so AniSkip markers appear without waiting for the 5s progress tick.
+  // Also poll for video duration so AniSkip markers appear without waiting for the progress tick.
+  // For progressViaFrames providers, also resume playback at the last saved time.
   useEffect(() => {
     if (!playing) return;
     const wv = webviewRef.current;
@@ -1067,9 +1068,39 @@ export default function TVPage({
       } catch {}
     }, 1000);
 
+    // Resume at saved position for progressViaFrames providers.
+    // Poll for up to 30s because the inner player loads asynchronously.
+    let resumeCleared = false;
+    let resumeAttempts = 0;
+    const savedTime = currentProgressKey
+      ? storage.get("dlTime_" + currentProgressKey) || 0
+      : 0;
+    const onLoad = () => {
+      if (!progressViaFrames || savedTime < 3 || resumeCleared) return;
+      const trySeek = async () => {
+        if (resumeCleared) return;
+        resumeAttempts++;
+        try {
+          const ok = await window.electron?.seekVideoInFrames?.(
+            wv.getWebContentsId(),
+            savedTime,
+          );
+          if (ok || resumeAttempts >= 20) resumeCleared = true;
+          else setTimeout(trySeek, 1500);
+        } catch {
+          if (resumeAttempts < 20) setTimeout(trySeek, 1500);
+          else resumeCleared = true;
+        }
+      };
+      setTimeout(trySeek, 2000);
+    };
+    wv.addEventListener("did-finish-load", onLoad);
+
     return () => {
+      resumeCleared = true;
       wv.removeEventListener("did-finish-load", done);
       wv.removeEventListener("did-fail-load", done);
+      wv.removeEventListener("did-finish-load", onLoad);
       clearInterval(pollDuration);
     };
   }, [playing, playerSource, item.id, selectedEp?.episode_number]);
@@ -1143,7 +1174,7 @@ export default function TVPage({
     if (!aniSkipActive) setSkipPrompt(null);
     if (!playing || !currentProgressKey) return;
 
-    const TICK = aniSkipActive ? 1000 : 5000;
+    const TICK = aniSkipActive ? 1000 : 3000;
     let tickCount = 0;
     let interval = null;
 
@@ -1171,7 +1202,7 @@ export default function TVPage({
             result = await wv.executeJavaScript(`
               (() => {
                 const v = document.querySelector('video')
-                if (!v || !v.duration || v.duration === Infinity || v.paused) return null
+                if (!v || !v.duration || v.duration === Infinity) return null
                 // Re-attach seek tracker if video element was recreated (e.g. quality change)
                 if (!v._seekTracked) {
                   v._seekTracked = true

@@ -90,6 +90,27 @@ export const tmdbFetch = async (path, apiKey) => {
 // supportsProgress: true = executeJavaScript tracking works for this source
 export const PLAYER_SOURCES = [
   {
+    id: "superflixapi",
+    label: "SuperflixAPI",
+    tag: null,
+    note: "PT-BR",
+    supportsProgress: true,
+    progressViaFrames: true,
+    movieUrl: (id) => `https://superflixapi.best/filme/${id}`,
+    tvUrl: (id, season, ep) =>
+      `https://superflixapi.best/serie/${id}/${season}/${ep}`,
+  },
+  {
+    id: "embedmovies",
+    label: "EmbedMovies",
+    tag: null,
+    note: "PT-BR",
+    supportsProgress: true,
+    progressViaFrames: true,
+    movieUrl: (id) => `https://myembed.biz/filme/${id}`,
+    tvUrl: (id, season, ep) => `https://myembed.biz/serie/${id}/${season}/${ep}`,
+  },
+  {
     id: "videasy",
     label: "Videasy",
     tag: null,
@@ -120,26 +141,6 @@ export const PLAYER_SOURCES = [
     movieUrl: (id) => `https://www.2embed.online/embed/movie/${id}`,
     tvUrl: (id, season, ep) =>
       `https://www.2embed.online/embed/tv/${id}/${season}/${ep}`,
-  },
-  {
-    id: "pomfy",
-    label: "Pomfy",
-    tag: null,
-    note: "PT-BR",
-    supportsProgress: true,
-    movieUrl: (id) => `https://api.pomfy.stream/filme/${id}`,
-    tvUrl: (id, season, ep) =>
-      `https://api.pomfy.stream/serie/${id}/${season}/${ep}`,
-  },
-  {
-    id: "superflixapi",
-    label: "SuperflixAPI",
-    tag: "ANIME",
-    note: "PT-BR",
-    supportsProgress: true,
-    movieUrl: (id) => `https://superflixapi.best/filme/${id}`,
-    tvUrl: (id, season, ep) =>
-      `https://superflixapi.best/serie/${id}/${season}/${ep}`,
   },
   {
     id: "allmanga",
@@ -173,7 +174,7 @@ export const NEEDS_INTERCEPT = ["vidsrc", "2embed"];
 
 // Sources that must NOT have the sandbox attribute on the webview — they detect
 // sandbox via window.frameElement.hasAttribute('sandbox') and block playback.
-export const NO_SANDBOX = ["superflixapi", "pomfy"];
+export const NO_SANDBOX = ["superflixapi", "embedmovies"];
 
 // ── AniList API (anime metadata) ──────────────────────────────────────────────
 const ANILIST_API = "https://graphql.anilist.co";
@@ -385,7 +386,7 @@ export const isAnimeContent = (item, details) => {
 
 // Default sources
 export const ANIME_DEFAULT_SOURCE = "allmanga";
-export const NON_ANIME_DEFAULT_SOURCE = "vidsrc";
+export const NON_ANIME_DEFAULT_SOURCE = "embedmovies";
 
 // ── Episode Group fetch (localStorage + in-memory cache, 7-day TTL) ─────────
 // Episode groups almost never change, so we cache aggressively across sessions.

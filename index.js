@@ -131,16 +131,16 @@ function setupSession(playerSession, trailerSession) {
   );
 
   // Inject Referer and Sec-Fetch-Dest for providers that validate these server-side.
-  // SuperflixAPI and Pomfy return their block page when Sec-Fetch-Dest is "document"
-  // (which is what Electron webview sends). Setting it to "iframe" makes the server
-  // respond with the actual player instead.
+  // SuperflixAPI and EmbedMovies return empty/block content when Sec-Fetch-Dest is
+  // "document" (which is what Electron webview sends). Setting it to "iframe" makes
+  // the server respond with the actual player instead.
   const SPOOF_AS_IFRAME = [
     "*://superflixapi.best/*",
-    "*://api.pomfy.stream/*",
+    "*://myembed.biz/*",
   ];
   const SPOOF_REFERERS = {
     "superflixapi.best": "https://superflixapi.best/",
-    "api.pomfy.stream": "https://pomfy.stream/",
+    "myembed.biz": "https://myembed.biz/",
   };
   playerSession.webRequest.onBeforeSendHeaders(
     { urls: SPOOF_AS_IFRAME },
