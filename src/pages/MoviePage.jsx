@@ -850,7 +850,7 @@ export default function MoviePage({
                 </button>
               ) : (
                 <button className="btn btn-primary" onClick={handlePlay}>
-                  <PlayIcon /> {playing ? "Restart" : "Play"}
+                  <PlayIcon /> {playing ? "Reiniciar" : "Play"}
                 </button>
               )}
               {trailerKey &&
@@ -888,7 +888,7 @@ export default function MoviePage({
                       className="btn btn-ghost"
                       onClick={() => onMarkWatched?.(progressKey)}
                     >
-                      ✓ Mark Watched
+                      ✓ Marcar como Assistido
                     </button>
                     {hasProgress && (
                       <button

@@ -107,12 +107,11 @@ export default function CastButton({ streamUrl, onCastChange, onTimeUpdate }) {
   }, [onTimeUpdate]);
 
   // ── Cleanup on unmount ─────────────────────────────────────────────────────
+  // NOTE: do NOT call castDisconnect on unmount — the component may remount
+  // due to parent re-renders while a cast session is active. The session lives
+  // in the main process and survives renderer re-renders.
   useEffect(() => {
-    return () => {
-      if (castStateRef.current === "casting") {
-        window.electron?.castDisconnect?.();
-      }
-    };
+    return () => {};
   }, []);
 
   // ── Click-outside to close dropdown ───────────────────────────────────────
@@ -181,7 +180,8 @@ export default function CastButton({ streamUrl, onCastChange, onTimeUpdate }) {
       setDropdownPos(calcPos(r));
     }
     setDropdownOpen((v) => !v);
-    if (isOpening) {
+    // Don't re-scan when already casting — just show controls
+    if (isOpening && castStateRef.current !== "casting") {
       setScanning(true);
       setErrorMsg(null);
       try {
@@ -222,6 +222,8 @@ export default function CastButton({ streamUrl, onCastChange, onTimeUpdate }) {
       console.log("[CastButton] castConnect result:", res);
       if (res?.ok) {
         setCastState("casting");
+        // Keep dropdown open so user can see controls immediately
+        setDropdownOpen(true);
       } else {
         setErrorMsg(res?.error || "Falha ao conectar");
         setCastState("error");

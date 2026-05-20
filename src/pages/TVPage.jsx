@@ -1661,7 +1661,7 @@ export default function TVPage({
                     style={{ marginLeft: "auto" }}
                     onClick={() => onMarkUnwatched?.(currentProgressKey)}
                   >
-                    <WatchedIcon size={14} /> Watched
+                    <WatchedIcon size={14} /> Assistido
                   </button>
                 ) : (
                   <button
@@ -1669,7 +1669,7 @@ export default function TVPage({
                     style={{ marginLeft: "auto" }}
                     onClick={() => onMarkWatched?.(currentProgressKey)}
                   >
-                    ✓ Mark Watched
+                    ✓ Marcar como Assistido
                   </button>
                 )}
               </div>

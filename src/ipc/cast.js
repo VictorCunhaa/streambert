@@ -22,6 +22,8 @@ const http = require("http");
 const { Client: CastClient, DefaultMediaReceiver } = require("castv2-client");
 const { Client: SsdpClient } = require("node-ssdp");
 const multicastDns = require("multicast-dns");
+const castProxy = require("./castProxy");
+const castHls = require("./castHls");
 
 // ── Module state ──────────────────────────────────────────────────────────────
 
@@ -41,7 +43,13 @@ const session = {
   duration: 0,
   playerState: "IDLE", // IDLE | PLAYING | PAUSED | BUFFERING
   mediaStatusInterval: null, // DLNA polling timer
+  hlsSessionId: null, // active HLS transcoding session (if using HLS fallback)
 };
+
+// Start the CORS proxy as soon as the module loads
+castProxy.startProxy().catch((err) =>
+  console.error("[cast] proxy start error:", err.message)
+);
 
 function resetSession() {
   if (session.castClient) {
@@ -50,6 +58,10 @@ function resetSession() {
   if (session.mediaStatusInterval) {
     clearInterval(session.mediaStatusInterval);
     session.mediaStatusInterval = null;
+  }
+  if (session.hlsSessionId) {
+    castHls.destroyHlsSession(session.hlsSessionId);
+    session.hlsSessionId = null;
   }
   session.state = "idle";
   session.deviceId = null;
@@ -455,28 +467,85 @@ function connectChromecast(device, streamUrl) {
 
     client.connect({ host: device.host, port: device.port }, () => {
       console.log("[cast] connected to Chromecast, launching DefaultMediaReceiver");
-      client.launch(DefaultMediaReceiver, (err, player) => {
+      client.launch(DefaultMediaReceiver, async (err, player) => {
         if (err) {
           console.error("[cast] launch error:", err);
           return reject(err);
         }
-        console.log("[cast] receiver launched, loading media:", streamUrl);
-        session.mediaPlayer = player;
 
-        // Detect stream type from URL
         const isHls = streamUrl.includes(".m3u8");
         const isDash = streamUrl.includes(".mpd");
-        const contentType = isHls
-          ? "application/x-mpegURL"
-          : isDash
-          ? "application/dash+xml"
-          : "video/mp4";
-        const streamType = "BUFFERED";
+        const localIp = pickLocalInterface();
 
-        console.log("[cast] contentType:", contentType, "streamType:", streamType);
+        let castUrl = streamUrl;
+        let contentType;
+        let streamType;
+
+        if (isHls) {
+          // Already HLS — just proxy for CORS and use as-is
+          contentType = "application/x-mpegURL";
+          streamType = "LIVE";
+          try {
+            if (localIp && castProxy.getPort()) {
+              castUrl = castProxy.buildProxyUrl(localIp, streamUrl);
+            }
+          } catch {}
+        } else if (isDash) {
+          contentType = "application/dash+xml";
+          streamType = "LIVE";
+          try {
+            if (localIp && castProxy.getPort()) {
+              castUrl = castProxy.buildProxyUrl(localIp, streamUrl);
+            }
+          } catch {}
+        } else {
+          // MP4 — probe the CDN for range request support
+          contentType = "video/mp4";
+          let brokenRanges = false;
+          try {
+            const probed = await castProxy.probeStreamType(streamUrl);
+            brokenRanges = (probed === "HLS_NEEDED");
+          } catch {}
+
+          if (brokenRanges && localIp) {
+            // CDN doesn't support real ranges → remux to HLS on-the-fly
+            console.log("[cast] CDN has broken ranges — using HLS on-the-fly via ffmpeg");
+            try {
+              const { hlsUrl, sessionId } = await castHls.createHlsSession(localIp, streamUrl);
+              session.hlsSessionId = sessionId;
+              castUrl = hlsUrl;
+              contentType = "application/x-mpegURL";
+              streamType = "LIVE";
+              console.log("[cast] HLS session created:", hlsUrl);
+            } catch (hlsErr) {
+              console.error("[cast] HLS session creation failed:", hlsErr.message, "— falling back to proxy");
+              // Fall back to direct proxy
+              try {
+                if (localIp && castProxy.getPort()) {
+                  castUrl = castProxy.buildProxyUrl(localIp, streamUrl);
+                }
+              } catch {}
+              streamType = "BUFFERED";
+            }
+          } else {
+            // CDN supports ranges — use CORS proxy normally
+            streamType = "BUFFERED";
+            try {
+              if (localIp && castProxy.getPort()) {
+                castUrl = castProxy.buildProxyUrl(localIp, streamUrl);
+                console.log("[cast] using proxy URL:", castUrl.slice(0, 80) + "...");
+              }
+            } catch (e) {
+              console.warn("[cast] proxy URL build failed:", e.message);
+            }
+          }
+        }
+
+        console.log("[cast] loading media — contentType:", contentType, "streamType:", streamType);
+        console.log("[cast] castUrl:", castUrl.slice(0, 100));
 
         const media = {
-          contentId: streamUrl,
+          contentId: castUrl,
           contentType,
           streamType,
         };
@@ -492,9 +561,25 @@ function connectChromecast(device, streamUrl) {
           player.on("status", (status) => {
             if (!status) return;
             console.log("[cast] status update:", status.playerState, "t=", status.currentTime);
+            const prevState = session.playerState;
             session.currentTime = status.currentTime ?? session.currentTime;
             session.duration = status.media?.duration ?? session.duration;
             session.playerState = status.playerState ?? session.playerState;
+
+            // If the device went IDLE well into playback, the stream likely ended.
+            // Only clean up HLS if we've actually played a meaningful amount (>30s),
+            // to avoid destroying the session during early buffering/startup glitches.
+            if (
+              session.playerState === "IDLE" &&
+              prevState === "PLAYING" &&
+              session.currentTime > 30
+            ) {
+              console.log("[cast] device went IDLE after playing — cleaning up HLS session");
+              if (session.hlsSessionId) {
+                castHls.destroyHlsSession(session.hlsSessionId);
+                session.hlsSessionId = null;
+              }
+            }
 
             sendTimeUpdate({
               currentTime: session.currentTime,

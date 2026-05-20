@@ -1290,7 +1290,7 @@ const LocalFileCard = memo(function LocalFileCard({
                 onClick={onMarkUnwatched}
                 title="Mark as Unwatched"
               >
-                <WatchedIcon size={13} /> Watched
+                <WatchedIcon size={13} /> Assistido
               </button>
             ) : (
               <button
@@ -1298,7 +1298,7 @@ const LocalFileCard = memo(function LocalFileCard({
                 onClick={onMarkWatched}
                 title="Mark as Watched"
               >
-                ✓ Mark Watched
+                ✓ Marcar como Assistido
               </button>
             ))}
           {canWatch && (
