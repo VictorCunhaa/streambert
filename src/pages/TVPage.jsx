@@ -47,6 +47,7 @@ import {
   PopOutIcon,
 } from "../components/Icons";
 import DownloadModal from "../components/DownloadModal";
+import CastButton from "../components/CastButton";
 import TrailerModal from "../components/TrailerModal";
 import BlockedStatsModal from "../components/BlockedStatsModal";
 import { useBlockedStats } from "../utils/useBlockedStats";
@@ -412,6 +413,11 @@ export default function TVPage({
   const [pipOpen, setPipOpen] = useState(false);
   const pipUrlRef = useRef(null);
   const pipWebContentsIdRef = useRef(null); // cached WebContents ID of the pop-out window
+
+  // Cast / Chromecast
+  const [streamUrl, setStreamUrl] = useState(null);
+  const [castState, setCastState] = useState("idle");
+  const castCurrentTimeRef = useRef(null); // { currentTime, duration } from device during cast
   const [menuPos, setMenuPos] = useState(null);
   // AniSkip
   const [skipTimings, setSkipTimings] = useState(null); // { intro?, outro? }
@@ -1198,6 +1204,29 @@ export default function TVPage({
     return () => wv.removeEventListener("before-input-event", handler);
   }, [skipPrompt, handleManualSkip]);
 
+  // ── Capture stream URL for Cast (intercepted by main process) ───────────────
+  useEffect(() => {
+    if (!playing) return;
+    if (!window.electron?.onCastStreamUrl) return;
+    const h = window.electron.onCastStreamUrl((url) => {
+      console.log("[TVPage] cast:stream-url received:", url);
+      setStreamUrl(url);
+    });
+    return () => window.electron.offCastStreamUrl?.(h);
+  }, [playing]);
+
+  // ── cast:time-update → update castCurrentTimeRef for progress loop ────────
+  useEffect(() => {
+    if (!window.electron?.onCastTimeUpdate) return;
+    const h = window.electron.onCastTimeUpdate((data) => {
+      castCurrentTimeRef.current = {
+        currentTime: data.currentTime,
+        duration: data.duration,
+      };
+    });
+    return () => window.electron.offCastTimeUpdate?.(h);
+  }, []);
+
   // Unified progress/skip timing tick for Allmanga and other sources.
   // Skip detection runs every tick, progress is saved every 5th tick (5s).
   useEffect(() => {
@@ -1288,50 +1317,49 @@ export default function TVPage({
           if (aniSkipActive && tickCount % 5 !== 0) return;
 
           if (result && result.duration > 0) {
-            durationRef.current = result.duration;
-            const ct = result.currentTime;
+            // When casting, use the device's currentTime instead of the webview's
+            const castData = castState === "casting" ? castCurrentTimeRef.current : null;
+            const ct = castData?.currentTime ?? result.currentTime;
+            const effectiveDuration = castData?.duration ?? result.duration;
+            durationRef.current = effectiveDuration;
 
-            // ── Resolution-change reset detection ──────────────────────────
-            // Videasy resets to 0 on quality change. We only seek back if:
-            // - ct is near zero (≤5s)
-            // - we were well into the video (>30s)
-            // - the user did NOT manually seek in the last 6s
-            const now = Date.now();
-            if (
-              lastKnownTimeRef.current > 30 &&
-              ct <= 5 &&
-              !result.recentUserSeek
-            ) {
-              if (now > seekBackCooldownRef.current) {
-                // First reset: seek back and start cooldown
-                const seekTo = lastKnownTimeRef.current;
-                seekBackCooldownRef.current = now + 8000;
-                try {
-                  await wv.executeJavaScript(`
-                    (() => {
-                      const v = document.querySelector('video')
-                      if (v) v.currentTime = ${seekTo}
-                    })()
-                  `);
-                } catch {}
+            // Skip reset detection when casting (webview ct is irrelevant)
+            if (!castData) {
+              const now = Date.now();
+              if (
+                lastKnownTimeRef.current > 30 &&
+                ct <= 5 &&
+                !result.recentUserSeek
+              ) {
+                if (now > seekBackCooldownRef.current) {
+                  const seekTo = lastKnownTimeRef.current;
+                  seekBackCooldownRef.current = now + 8000;
+                  try {
+                    await wv.executeJavaScript(`
+                      (() => {
+                        const v = document.querySelector('video')
+                        if (v) v.currentTime = ${seekTo}
+                      })()
+                    `);
+                  } catch {}
+                }
+                return;
               }
-              // In both cases (first reset or cooldown): skip progress save with wrong position
-              return;
             }
 
             // If user seeked, update ref to their chosen position immediately
-            if (result.recentUserSeek && result.lastUserSeekTo !== null) {
+            if (!castData && result.recentUserSeek && result.lastUserSeekTo !== null) {
               lastKnownTimeRef.current = result.lastUserSeekTo;
             } else {
               lastKnownTimeRef.current = ct;
             }
-            const p = Math.floor((ct / result.duration) * 100);
+            const p = Math.floor((ct / effectiveDuration) * 100);
             saveProgressRef.current(currentProgressKey, Math.min(p, 100));
             // Also persist actual seconds so DownloadsPage can show resume position
             storage.set("dlTime_" + currentProgressKey, Math.floor(ct));
 
             // Auto-mark watched when remaining time ≤ threshold
-            const remaining = result.duration - ct;
+            const remaining = effectiveDuration - ct;
             if (
               !autoMarkedRef.current &&
               remaining <= watchedThreshold &&
@@ -1867,10 +1895,16 @@ export default function TVPage({
                       (webviewLoading || !!(isAsync && !resolvedPlayerUrl))
                     }
                     style={pipOpen ? { color: "var(--red)" } : undefined}
-                  >
-                    <PopOutIcon />
-                  </button>
-                </div>
+                    >
+                      <PopOutIcon />
+                    </button>
+                    {/* Cast / Chromecast / DLNA button */}
+                    <CastButton
+                      streamUrl={streamUrl}
+                      onCastChange={setCastState}
+                      onTimeUpdate={(data) => { castCurrentTimeRef.current = data; }}
+                    />
+                  </div>
                 {showSourceMenu && menuPos && (
                   <div
                     className="source-dropdown source-dropdown--fixed"

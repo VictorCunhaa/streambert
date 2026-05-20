@@ -3833,3 +3833,217 @@ html[data-win-titlebar][data-maximized] .main {
 .episode-check-item:hover {
     color: var(--text) !important;
 }
+
+/* ── Cast button state overrides ─────────────────────────────────────────── */
+@keyframes cast-spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+}
+
+.player-overlay-btn--casting {
+    color: var(--accent, #e50914);
+    border-color: rgba(229, 9, 20, 0.5);
+}
+
+.player-overlay-btn--connecting {
+    opacity: 0.7;
+    cursor: default;
+}
+
+/* ── Cast dropdown ───────────────────────────────────────────────────────── */
+.cast-dropdown {
+    position: fixed;
+    z-index: 99999;
+    min-width: 240px;
+    max-width: 300px;
+    background: rgba(18, 18, 18, 0.97);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    padding: 10px 0 6px;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+    color: var(--text, #fff);
+    font-size: 13px;
+    opacity: 1 !important;
+    pointer-events: all !important;
+}
+
+.cast-dropdown__section-title {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text3, #888);
+    padding: 0 14px 6px;
+}
+
+.cast-dropdown__scanning,
+.cast-dropdown__empty {
+    padding: 8px 14px;
+    color: var(--text3, #888);
+    font-size: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.cast-dropdown__error {
+    padding: 6px 14px;
+    color: var(--red, #e50914);
+    font-size: 12px;
+}
+
+.cast-dropdown__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.cast-device-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    background: none;
+    border: none;
+    color: var(--text, #fff);
+    font-size: 13px;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s;
+}
+
+.cast-device-btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.07);
+}
+
+.cast-device-btn:disabled {
+    cursor: default;
+    opacity: 0.5;
+}
+
+.cast-device-btn--active {
+    color: var(--accent, #e50914);
+}
+
+.cast-device-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cast-device-type {
+    font-size: 10px;
+    color: var(--text3, #888);
+    flex-shrink: 0;
+}
+
+.cast-rescan-btn {
+    background: none;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 6px;
+    color: var(--text2, #ccc);
+    font-size: 12px;
+    padding: 4px 10px;
+    cursor: pointer;
+    transition: background 0.15s;
+    white-space: nowrap;
+}
+
+.cast-rescan-btn:hover:not(:disabled) {
+    background: rgba(255,255,255,0.08);
+}
+
+.cast-rescan-btn--inline {
+    margin: 6px 14px 4px;
+    display: block;
+    width: calc(100% - 28px);
+    text-align: center;
+}
+
+/* Cast controls (pause/resume/seek/volume) */
+.cast-dropdown__controls {
+    padding: 8px 14px 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    margin-bottom: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.cast-dropdown__controls-row {
+    display: flex;
+    gap: 6px;
+}
+
+.cast-ctrl-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 10px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    color: var(--text, #fff);
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.15s;
+    flex: 1;
+    justify-content: center;
+}
+
+.cast-ctrl-btn:hover {
+    background: rgba(255, 255, 255, 0.14);
+}
+
+.cast-ctrl-btn--disconnect {
+    color: var(--red, #e50914);
+    border-color: rgba(229, 9, 20, 0.3);
+    flex: none;
+    padding: 5px 12px;
+}
+
+.cast-ctrl-btn--disconnect:hover {
+    background: rgba(229, 9, 20, 0.15);
+}
+
+.cast-dropdown__seek,
+.cast-dropdown__volume {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.cast-time,
+.cast-label {
+    font-size: 11px;
+    color: var(--text3, #888);
+    white-space: nowrap;
+    min-width: 34px;
+    text-align: center;
+}
+
+.cast-slider {
+    flex: 1;
+    -webkit-appearance: none;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.2);
+    outline: none;
+    cursor: pointer;
+}
+
+.cast-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--accent, #e50914);
+    cursor: pointer;
+}
+
+.cast-slider:hover {
+    background: rgba(255, 255, 255, 0.3);
+}

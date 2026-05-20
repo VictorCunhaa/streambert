@@ -42,6 +42,7 @@ const downloadsIpc = require("./src/ipc/downloads");
 const subtitlesIpc = require("./src/ipc/subtitles");
 const allmangaIpc = require("./src/ipc/allmanga");
 const playerIpc = require("./src/ipc/player");
+const castIpc = require("./src/ipc/cast");
 
 // -- Ad/tracker block list -----------------------------------------------------
 const BLOCKED_HOSTS = [
@@ -165,18 +166,20 @@ function setupSession(playerSession, trailerSession) {
     cb({ cancel: true }),
   );
 
-  // Player session: block ads + intercept m3u8/vtt URLs for renderer
+  // Player session: block ads + intercept m3u8/vtt/mp4 URLs for renderer
   const MEDIA_URLS = [
     "*://*/*.m3u8*",
     "*://*/*.m3u8",
     "*://*/*.vtt*",
     "*://*/*.vtt",
+    "*://*/*.mp4*",
+    "*://*/*.mp4",
   ];
   playerSession.webRequest.onBeforeRequest(
     { urls: [...BLOCKED_HOSTS, ...MEDIA_URLS] },
     (details, callback) => {
       const { url } = details;
-      const isMedia = url.includes(".m3u8") || url.includes(".vtt");
+      const isMedia = url.includes(".m3u8") || url.includes(".vtt") || url.includes(".mp4");
       if (!isMedia) {
         blockStats.recordBlockedRequest(url);
         callback({ cancel: true });
@@ -202,6 +205,9 @@ function setupSession(playerSession, trailerSession) {
       if (mw && !mw.isDestroyed()) {
         if (url.includes(".m3u8")) {
           mw.webContents.send("m3u8-found", url);
+          mw.webContents.send("cast:stream-url", url);
+        } else if (url.includes(".mp4")) {
+          mw.webContents.send("cast:stream-url", url);
         } else if (url.includes(".vtt")) {
           const { extractSubtitleLang } = require("./src/ipc/subtitles");
           mw.webContents.send("subtitle-found", {
@@ -348,6 +354,7 @@ allmangaIpc.register();
 playerIpc.register(getMainWindow, {
   writeSecretMigration: storageIpc.writeSecretMigration,
 });
+castIpc.register(getMainWindow);
 blockStats.init(getMainWindow);
 
 // get-block-stats lives with its data

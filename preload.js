@@ -165,6 +165,26 @@ contextBridge.exposeInMainWorld("electron", {
   getVideoDuration: (filePath) =>
     ipcRenderer.invoke("get-video-duration", filePath),
   setZoomFactor: (factor) => webFrame.setZoomFactor(factor),
+  // Cast / Chromecast / DLNA
+  castDiscover: () => ipcRenderer.invoke("cast:discover"),
+  castConnect: (deviceId, streamUrl, device) =>
+    ipcRenderer.invoke("cast:connect", { deviceId, streamUrl, device }),
+  castDisconnect: () => ipcRenderer.invoke("cast:disconnect"),
+  castStatus: () => ipcRenderer.invoke("cast:status"),
+  castControl: (action, position, level) =>
+    ipcRenderer.invoke("cast:control", { action, position, level }),
+  onCastTimeUpdate: (cb) => {
+    const h = (_, data) => cb(data);
+    ipcRenderer.on("cast:time-update", h);
+    return h;
+  },
+  offCastTimeUpdate: (h) => ipcRenderer.removeListener("cast:time-update", h),
+  onCastStreamUrl: (cb) => {
+    const h = (_, url) => cb(url);
+    ipcRenderer.on("cast:stream-url", h);
+    return h;
+  },
+  offCastStreamUrl: (h) => ipcRenderer.removeListener("cast:stream-url", h),
   // Auto-updater
   detectUpdateFormat: () => ipcRenderer.invoke("detect-update-format"),
   downloadAndInstallUpdate: (args) =>
