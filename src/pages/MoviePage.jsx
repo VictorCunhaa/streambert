@@ -43,6 +43,7 @@ import DownloadModal from "../components/DownloadModal";
 import TrailerModal from "../components/TrailerModal";
 import BlockedStatsModal from "../components/BlockedStatsModal";
 import CastButton from "../components/CastButton";
+import MediaCard from "../components/MediaCard";
 import { useBlockedStats } from "../utils/useBlockedStats";
 import { storage } from "../utils/storage";
 import {
