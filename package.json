@@ -41,7 +41,8 @@
     "productName": "Streambert",
     "asar": true,
     "asarUnpack": [
-      "node_modules/ffmpeg-static/**"
+      "node_modules/ffmpeg-static/**",
+      "src/styles/fonts/**"
     ],
     "compression": "normal",
     "directories": {
@@ -155,9 +156,6 @@
     "electronLanguages": [
       "en-US",
       "de"
-    ],
-    "asarUnpack": [
-      "src/styles/fonts/**"
     ]
   }
 }

@@ -479,16 +479,35 @@ export default function MoviePage({
       (() => {
         if (window.__sc_serverHidden) return;
         window.__sc_serverHidden = true;
-        const hide = () => {
-          for (const card of document.querySelectorAll('.server-card, .player_select_item')) {
-            const id = card.getAttribute('data-id') || '';
-            if (id && !id.startsWith('native_media:')) {
-              card.style.setProperty('display', 'none', 'important');
+        const WARNING_ID = '__sc_no_cast_warn';
+        const apply = () => {
+          const cards = Array.from(document.querySelectorAll('.server-card, .player_select_item'));
+          if (!cards.length) return;
+          const hasNative = cards.some(c => (c.getAttribute('data-id') || '').startsWith('native_media:'));
+          if (hasNative) {
+            // Preferred mode: hide embed cards entirely
+            for (const card of cards) {
+              const id = card.getAttribute('data-id') || '';
+              if (id && !id.startsWith('native_media:')) {
+                card.style.setProperty('display', 'none', 'important');
+              }
+            }
+          } else {
+            // Fallback: no native_media available — show all, but warn on embed cards
+            for (const card of cards) {
+              const id = card.getAttribute('data-id') || '';
+              if (!id.startsWith('native_media:') && !card.querySelector('.' + WARNING_ID)) {
+                const warn = document.createElement('div');
+                warn.className = WARNING_ID;
+                warn.textContent = 'essa opção não é possível espelhar na TV';
+                warn.style.cssText = 'font-size:11px;color:#f87171;margin-top:2px;padding:0 12px 8px;';
+                card.appendChild(warn);
+              }
             }
           }
         };
-        hide();
-        const obs = new MutationObserver(hide);
+        apply();
+        const obs = new MutationObserver(apply);
         obs.observe(document.body, { childList: true, subtree: true });
         setTimeout(() => obs.disconnect(), 15000);
       })()
