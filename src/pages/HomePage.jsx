@@ -8,6 +8,27 @@ import { isRestricted } from "../utils/ageRating";
 import { storage } from "../utils/storage";
 import { loadHomeLayout, loadHomeViewMode } from "../utils/homeLayout";
 
+// ── Gêneros disponíveis na API do TMDB ───────────────────────────────────────
+const GENRES = [
+  { id: 28,    name: "Ação",             emoji: "💥", color: "#c0392b" },
+  { id: 12,    name: "Aventura",         emoji: "🗺️", color: "#d35400" },
+  { id: 16,    name: "Animação",         emoji: "🎨", color: "#8e44ad" },
+  { id: 35,    name: "Comédia",          emoji: "😂", color: "#b8860b" },
+  { id: 80,    name: "Crime",            emoji: "🕵️", color: "#2c3e50" },
+  { id: 99,    name: "Documentário",     emoji: "🎬", color: "#2980b9" },
+  { id: 18,    name: "Drama",            emoji: "🎭", color: "#6c3483" },
+  { id: 10751, name: "Família",          emoji: "👨‍👩‍👧", color: "#1e8449" },
+  { id: 14,    name: "Fantasia",         emoji: "🧙", color: "#5b2c6f" },
+  { id: 27,    name: "Terror",           emoji: "👻", color: "#922b21" },
+  { id: 10402, name: "Música",           emoji: "🎵", color: "#ad1457" },
+  { id: 9648,  name: "Mistério",         emoji: "🔍", color: "#1a237e" },
+  { id: 10749, name: "Romance",          emoji: "❤️", color: "#c2185b" },
+  { id: 878,   name: "Ficção Científica",emoji: "🚀", color: "#0097a7" },
+  { id: 53,    name: "Suspense",         emoji: "😱", color: "#37474f" },
+  { id: 10752, name: "Guerra",           emoji: "⚔️", color: "#5d4037" },
+  { id: 37,    name: "Faroeste",         emoji: "🤠", color: "#8d6e63" },
+];
+
 function getRecentHistoryItem(history) {
   if (!history || history.length === 0) return null;
   const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
@@ -32,6 +53,7 @@ export default function HomePage({
   onMarkUnwatched,
   history,
   apiKey,
+  onGenreSelect,
 }) {
   const hero = trending[0];
 
@@ -383,6 +405,74 @@ export default function HomePage({
 
         return null;
       })}
+
+      {/* ── Explore por Gêneros ──────────────────────────────────────────── */}
+      {!offline && !loading && onGenreSelect && (
+        <div className="section">
+          <div className="section-title">
+            Explore por&nbsp;
+            <span style={{ color: "var(--red)" }}>Gêneros</span>
+          </div>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))",
+              gap: 12,
+            }}
+          >
+            {GENRES.map((genre) => (
+              <button
+                key={genre.id}
+                onClick={() =>
+                  onGenreSelect(genre.id, genre.name, genre.emoji, genre.color)
+                }
+                style={{
+                  padding: "18px 12px 14px",
+                  background: `linear-gradient(145deg, ${genre.color}33, ${genre.color}11)`,
+                  border: `1px solid ${genre.color}44`,
+                  borderRadius: 12,
+                  color: "var(--text)",
+                  cursor: "pointer",
+                  fontFamily: "var(--font-body)",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 8,
+                  transition: "transform 0.18s, box-shadow 0.18s, border-color 0.18s, background 0.18s",
+                  boxShadow: "0 2px 12px rgba(0,0,0,0.35)",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = "translateY(-3px) scale(1.03)";
+                  e.currentTarget.style.boxShadow = `0 8px 24px ${genre.color}44`;
+                  e.currentTarget.style.borderColor = `${genre.color}99`;
+                  e.currentTarget.style.background = `linear-gradient(145deg, ${genre.color}55, ${genre.color}22)`;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "none";
+                  e.currentTarget.style.boxShadow = "0 2px 12px rgba(0,0,0,0.35)";
+                  e.currentTarget.style.borderColor = `${genre.color}44`;
+                  e.currentTarget.style.background = `linear-gradient(145deg, ${genre.color}33, ${genre.color}11)`;
+                }}
+              >
+                <span style={{ fontSize: 28, lineHeight: 1 }}>
+                  {genre.emoji}
+                </span>
+                <span
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 600,
+                    textAlign: "center",
+                    color: "var(--text)",
+                    lineHeight: 1.2,
+                  }}
+                >
+                  {genre.name}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

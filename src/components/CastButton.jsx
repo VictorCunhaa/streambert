@@ -69,7 +69,7 @@ function fmtTime(secs) {
 // position:fixed + getBoundingClientRect. This escapes the player-wrap's
 // overflow:hidden and the opacity:0 hover mask.
 
-export default function CastButton({ streamUrl, onCastChange, onTimeUpdate }) {
+export default function CastButton({ streamUrl, altStreamUrl, onCastChange, onTimeUpdate }) {
   // ── State ──────────────────────────────────────────────────────────────────
   const [castState, setCastStateInternal] = useState("idle");
   const [devices, setDevices] = useState([]);
@@ -213,12 +213,15 @@ export default function CastButton({ streamUrl, onCastChange, onTimeUpdate }) {
       setErrorMsg("URL do stream não detectada ainda. Aguarde o vídeo carregar.");
       return;
     }
-    console.log("[CastButton] connecting to", device.name, "streamUrl:", streamUrl);
+    console.log("[CastButton] ▶️ iniciando cast para dispositivo:", device.name, `(${device.type})`);
+    console.log("[CastButton] streamUrl (primária):", streamUrl);
+    if (altStreamUrl) console.log("[CastButton] altStreamUrl (secundária):", altStreamUrl);
+    console.log("[CastButton] tipo detectado:", streamUrl.includes(".m3u8") ? "HLS" : streamUrl.includes(".mp4") ? "MP4" : "HLS sem extensão");
     setErrorMsg(null);
     setCastState("connecting");
     connectedDeviceRef.current = device;
     try {
-      const res = await window.electron?.castConnect?.(device.id, streamUrl, device);
+      const res = await window.electron?.castConnect?.(device.id, streamUrl, device, altStreamUrl || null);
       console.log("[CastButton] castConnect result:", res);
       if (res?.ok) {
         setCastState("casting");
@@ -233,7 +236,7 @@ export default function CastButton({ streamUrl, onCastChange, onTimeUpdate }) {
       setErrorMsg(err.message);
       setCastState("error");
     }
-  }, [streamUrl, setCastState]);
+  }, [streamUrl, altStreamUrl, setCastState]);
 
   const handleDisconnect = useCallback(async () => {
     await window.electron?.castDisconnect?.();

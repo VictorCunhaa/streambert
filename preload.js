@@ -167,8 +167,8 @@ contextBridge.exposeInMainWorld("electron", {
   setZoomFactor: (factor) => webFrame.setZoomFactor(factor),
   // Cast / Chromecast / DLNA
   castDiscover: () => ipcRenderer.invoke("cast:discover"),
-  castConnect: (deviceId, streamUrl, device) =>
-    ipcRenderer.invoke("cast:connect", { deviceId, streamUrl, device }),
+  castConnect: (deviceId, streamUrl, device, altStreamUrl) =>
+    ipcRenderer.invoke("cast:connect", { deviceId, streamUrl, device, altStreamUrl: altStreamUrl || null }),
   castDisconnect: () => ipcRenderer.invoke("cast:disconnect"),
   castStatus: () => ipcRenderer.invoke("cast:status"),
   castControl: (action, position, level) =>

@@ -19,6 +19,7 @@
 const { ipcMain } = require("electron");
 const os = require("os");
 const http = require("http");
+const https = require("https");
 const { Client: CastClient, DefaultMediaReceiver } = require("castv2-client");
 const { Client: SsdpClient } = require("node-ssdp");
 const multicastDns = require("multicast-dns");
@@ -27,7 +28,8 @@ const castHls = require("./castHls");
 
 // ── Module state ──────────────────────────────────────────────────────────────
 
-let _getMainWindow = null; // injected by register()
+let _getMainWindow = null;     // injected by register()
+let _getPlayerCookies = null;  // async (url) => cookieString
 
 // Active cast session (one at a time)
 const session = {
@@ -360,8 +362,9 @@ function sendTimeUpdate(data) {
 
 // ── IPC Handlers ──────────────────────────────────────────────────────────────
 
-function register(getMainWindow) {
+function register(getMainWindow, getPlayerCookies) {
   _getMainWindow = getMainWindow;
+  _getPlayerCookies = getPlayerCookies || null;
 
   // ── cast:discover ──────────────────────────────────────────────────────────
   ipcMain.handle("cast:discover", async () => {
@@ -378,8 +381,8 @@ function register(getMainWindow) {
   });
 
   // ── cast:connect ───────────────────────────────────────────────────────────
-  ipcMain.handle("cast:connect", async (_, { deviceId, streamUrl, device }) => {
-    console.log("[cast] cast:connect called — deviceId:", deviceId, "streamUrl:", streamUrl, "device:", JSON.stringify(device));
+  ipcMain.handle("cast:connect", async (_, { deviceId, streamUrl, device, altStreamUrl }) => {
+    console.log("[cast] cast:connect called — deviceId:", deviceId, "streamUrl:", streamUrl, "altStreamUrl:", altStreamUrl || "(none)", "device:", JSON.stringify(device));
     if (session.state === "casting" || session.state === "connecting") {
       resetSession();
     }
@@ -387,9 +390,25 @@ function register(getMainWindow) {
     session.state = "connecting";
     session.deviceId = deviceId;
 
+    // Captura cookies do player session para o domínio do stream.
+    // Necessário para servidores protegidos por Cloudflare (cf_clearance, etc.).
+    let cookieStr = "";
+    if (_getPlayerCookies) {
+      try {
+        cookieStr = await _getPlayerCookies(streamUrl);
+        if (cookieStr) {
+          const hostname = new URL(streamUrl).hostname;
+          castProxy.setDomainCookies(hostname, cookieStr);
+          console.log(`[cast] cookies do player injetados no proxy para ${hostname}`);
+        }
+      } catch (e) {
+        console.warn("[cast] falha ao buscar cookies do player:", e.message);
+      }
+    }
+
     try {
       if (device.type === "chromecast") {
-        await connectChromecast(device, streamUrl);
+        await connectChromecast(device, streamUrl, cookieStr, altStreamUrl);
       } else if (device.type === "dlna") {
         await connectDlna(device, streamUrl);
       } else {
@@ -458,9 +477,66 @@ function register(getMainWindow) {
 
 // ── Chromecast connection + control ───────────────────────────────────────────
 
-function connectChromecast(device, streamUrl) {
+// ── Quick probe: fetch first 2KB of a playlist to detect if it's audio or video ──
+// Returns 'audio' if segments are in /Audio/ paths, 'video' if in /Video/ paths,
+// or 'unknown' if we can't determine.
+async function detectStreamRole(url, cookieStr) {
+  return new Promise((resolve) => {
+    const isHttps = url.startsWith("https:");
+    const lib = isHttps ? https : http;
+    let parsed;
+    try { parsed = new URL(url); } catch { return resolve("unknown"); }
+
+    const headers = {
+      host: parsed.hostname,
+      "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+      "referer": `https://${parsed.hostname}/`,
+    };
+    const domainCookie = cookieStr || "";
+    if (domainCookie) headers["cookie"] = domainCookie;
+
+    const options = {
+      hostname: parsed.hostname,
+      port: parsed.port ? parseInt(parsed.port) : (isHttps ? 443 : 80),
+      path: parsed.pathname + parsed.search,
+      method: "GET",
+      headers,
+      rejectUnauthorized: false,
+      timeout: 8000,
+    };
+
+    // Guard against resolving more than once (race between data/close/error)
+    let _resolved = false;
+    const done = (role) => { if (_resolved) return; _resolved = true; resolve(role); };
+
+    const req = lib.request(options, (res) => {
+      let data = "";
+      res.on("data", (chunk) => {
+        data += chunk.toString("utf8");
+        // Check pattern immediately — avoids the req.destroy() → error → "unknown" race.
+        // Calling res.destroy() here is safe: it fires "close" but NOT req's "error".
+        if (/\/Audio\//i.test(data)) { res.destroy(); return done("audio"); }
+        if (/\/Video\//i.test(data)) { res.destroy(); return done("video"); }
+        if (data.length > 4096) res.destroy(); // enough data, no match yet
+      });
+      res.on("close", () => {
+        // Fallback: codec hints if path-based check didn't trigger
+        if (/CODECS="avc/i.test(data) || /\bVIDEO\b/i.test(data)) return done("video");
+        if (/CODECS="mp4a/i.test(data) || /\bAUDIO\b/i.test(data)) return done("audio");
+        done("unknown");
+      });
+      res.on("error", () => done("unknown"));
+    });
+    req.on("error", () => done("unknown"));
+    req.on("timeout", () => { req.destroy(); done("unknown"); });
+    req.end();
+  });
+}
+
+function connectChromecast(device, streamUrl, cookieStr, altStreamUrl) {
   return new Promise((resolve, reject) => {
     console.log("[cast] connectChromecast start", device.host, device.port, streamUrl);
+    if (altStreamUrl) console.log("[cast] altStreamUrl:", altStreamUrl);
     const client = new CastClient();
     session.castClient = client;
     session.type = "chromecast";
@@ -473,23 +549,75 @@ function connectChromecast(device, streamUrl) {
           return reject(err);
         }
 
-        const isHls = streamUrl.includes(".m3u8");
+        // HLS: padrão (.m3u8) OU playlist mascarada como .txt em caminho /hls/
+        //      OU endpoint /m3/ (servidores MSE que servem playlists sem extensão)
+        const isHls = streamUrl.includes(".m3u8") ||
+                      (/\/hls\//i.test(streamUrl) && /\.txt(\?|$)/i.test(streamUrl)) ||
+                      /\/cdn\/hls\//i.test(streamUrl) ||
+                      /\/m3\//i.test(streamUrl);
         const isDash = streamUrl.includes(".mpd");
         const localIp = pickLocalInterface();
+
+        // ── Demuxed HLS (áudio+vídeo em playlists separados) ─────────────────
+        // Quando o servidor usa MSE com dois tracks separados, temos dois URLs /m3/.
+        // Identificamos qual é áudio e qual é vídeo, depois servimos um master HLS.
+        const bothAreDemuxedHls = isHls && altStreamUrl && /\/m3\//i.test(altStreamUrl);
+        let videoUrl = streamUrl;
+        let audioUrl = null;
+
+        if (bothAreDemuxedHls) {
+          console.log("[cast] detectando papéis dos streams demuxados (áudio vs vídeo)...");
+          const [role1, role2] = await Promise.all([
+            detectStreamRole(streamUrl, cookieStr),
+            detectStreamRole(altStreamUrl, cookieStr),
+          ]);
+          console.log(`[cast] stream1=${role1}, stream2=${role2}`);
+
+          if (role1 === "audio" && role2 !== "audio") {
+            audioUrl = streamUrl;
+            videoUrl = altStreamUrl;
+          } else if (role2 === "audio" && role1 !== "audio") {
+            audioUrl = altStreamUrl;
+            videoUrl = streamUrl;
+          } else {
+            // Can't determine — use streamUrl as video, altStreamUrl as audio (best guess)
+            console.log("[cast] ⚠️ não foi possível determinar papel dos streams — usando ordem original");
+            audioUrl = altStreamUrl;
+            videoUrl = streamUrl;
+          }
+          // Inject cookies for altStreamUrl hostname too
+          if (altStreamUrl) {
+            try {
+              const altHostname = new URL(altStreamUrl).hostname;
+              if (altHostname !== new URL(streamUrl).hostname && cookieStr) {
+                castProxy.setDomainCookies(altHostname, cookieStr);
+              }
+            } catch {}
+          }
+          console.log(`[cast] videoUrl: ${videoUrl.slice(0, 60)}`);
+          console.log(`[cast] audioUrl: ${audioUrl.slice(0, 60)}`);
+        }
 
         let castUrl = streamUrl;
         let contentType;
         let streamType;
 
         if (isHls) {
-          // Already HLS — just proxy for CORS and use as-is
           contentType = "application/x-mpegURL";
           streamType = "LIVE";
           try {
             if (localIp && castProxy.getPort()) {
-              castUrl = castProxy.buildProxyUrl(localIp, streamUrl);
+              if (bothAreDemuxedHls) {
+                // Serve um master HLS sintético que combina áudio+vídeo
+                castUrl = castProxy.buildMuxUrl(localIp, videoUrl, audioUrl);
+                console.log("[cast] usando mux URL (master demuxado):", castUrl.slice(0, 100));
+              } else {
+                castUrl = castProxy.buildProxyUrl(localIp, streamUrl);
+              }
             }
-          } catch {}
+          } catch (e) {
+            console.warn("[cast] falha ao construir castUrl:", e.message);
+          }
         } else if (isDash) {
           contentType = "application/dash+xml";
           streamType = "LIVE";
@@ -499,11 +627,11 @@ function connectChromecast(device, streamUrl) {
             }
           } catch {}
         } else {
-          // MP4 — probe the CDN for range request support
+          // MP4 ou stream desconhecido — probe o CDN com os cookies do browser
           contentType = "video/mp4";
           let brokenRanges = false;
           try {
-            const probed = await castProxy.probeStreamType(streamUrl);
+            const probed = await castProxy.probeStreamType(streamUrl, cookieStr);
             brokenRanges = (probed === "HLS_NEEDED");
           } catch {}
 
@@ -511,7 +639,7 @@ function connectChromecast(device, streamUrl) {
             // CDN doesn't support real ranges → remux to HLS on-the-fly
             console.log("[cast] CDN has broken ranges — using HLS on-the-fly via ffmpeg");
             try {
-              const { hlsUrl, sessionId } = await castHls.createHlsSession(localIp, streamUrl);
+              const { hlsUrl, sessionId } = await castHls.createHlsSession(localIp, streamUrl, cookieStr);
               session.hlsSessionId = sessionId;
               castUrl = hlsUrl;
               contentType = "application/x-mpegURL";
@@ -542,7 +670,8 @@ function connectChromecast(device, streamUrl) {
         }
 
         console.log("[cast] loading media — contentType:", contentType, "streamType:", streamType);
-        console.log("[cast] castUrl:", castUrl.slice(0, 100));
+        console.log("[cast] streamUrl original:", streamUrl);
+        console.log("[cast] castUrl (proxy/final):", castUrl);
 
         const media = {
           contentId: castUrl,

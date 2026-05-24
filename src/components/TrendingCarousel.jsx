@@ -51,7 +51,7 @@ const CarouselSlot = memo(function CarouselSlot({
   const year = (item.release_date || item.first_air_date || "").slice(0, 4);
   const poster = imgUrl(item.poster_path, "w342");
 
-  const scale = isCenter ? 1 : abs === 1 ? 0.75 : 0.54;
+  const scale = isCenter ? 1.1 : abs === 1 ? 0.75 : 0.54;
   const opacity = isCenter ? 1 : abs === 1 ? 0.65 : 0.35;
   const tx = offset * 230;
 

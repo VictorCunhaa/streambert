@@ -29,6 +29,7 @@ const TVPage = lazy(() => import("./pages/TVPage"));
 const LibraryPage = lazy(() => import("./pages/LibraryPage"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const DownloadsPage = lazy(() => import("./pages/DownloadsPage"));
+const GenrePage = lazy(() => import("./pages/GenrePage"));
 import { checkForUpdates } from "./utils/updates";
 
 export default function App() {
@@ -627,6 +628,13 @@ export default function App() {
     [navigate],
   );
 
+  const handleGenreSelect = useCallback(
+    (genreId, genreName, genreEmoji, genreColor) => {
+      navigate("genre", { genreId, genreName, genreEmoji, genreColor });
+    },
+    [navigate],
+  );
+
   const saveApiKey = useCallback((key) => {
     secureStorage.set("apikey", key);
     setApiKey(key);
@@ -896,6 +904,20 @@ export default function App() {
                 onMarkUnwatched={markUnwatched}
                 history={history}
                 apiKey={apiKey}
+                onGenreSelect={handleGenreSelect}
+              />
+            )}
+            {page === "genre" && selected && (
+              <GenrePage
+                genreId={selected.genreId}
+                genreName={selected.genreName}
+                genreEmoji={selected.genreEmoji}
+                genreColor={selected.genreColor}
+                apiKey={apiKey}
+                onSelect={handleSelectResult}
+                watched={watched}
+                onMarkWatched={markWatched}
+                onMarkUnwatched={markUnwatched}
               />
             )}
             {page === "movie" && selected && (

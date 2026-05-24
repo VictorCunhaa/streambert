@@ -3249,7 +3249,7 @@ kbd {
     display: flex;
     align-items: center;
     justify-content: center;
-    height: 312px;
+    height: 350px;
     overflow: hidden;
     user-select: none;
 }
@@ -3270,7 +3270,7 @@ kbd {
         opacity: 0.3;
     }
     to {
-        transform: translateX(var(--carousel-tx, 0px)) scale(1);
+        transform: translateX(var(--carousel-tx, 0px)) scale(1.1);
         opacity: 1;
     }
 }
@@ -3280,7 +3280,7 @@ kbd {
         opacity: 0.3;
     }
     to {
-        transform: translateX(var(--carousel-tx, 0px)) scale(1);
+        transform: translateX(var(--carousel-tx, 0px)) scale(1.1);
         opacity: 1;
     }
 }

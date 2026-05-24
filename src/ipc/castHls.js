@@ -55,11 +55,12 @@ const _sessions = new Map();
 // ── HlsSession ─────────────────────────────────────────────────────────────────
 
 class HlsSession extends EventEmitter {
-  constructor(id, sourceUrl, localIp) {
+  constructor(id, sourceUrl, localIp, cookieStr) {
     super();
     this.id = id;
     this.sourceUrl = sourceUrl;
     this.localIp = localIp;
+    this.cookieStr = cookieStr || "";
     this.segments = [];        // Array<Buffer> — completed .ts segments
     this.playlist = null;      // string — latest m3u8 playlist content
     this.ffmpeg = null;
@@ -99,11 +100,25 @@ class HlsSession extends EventEmitter {
     this._playlistPath = playlistPath;
     this._segPattern = segPattern;
 
+    // Monta headers HTTP para ffmpeg (necessário para CDNs que exigem cookies/referer)
+    let parsedHost = "";
+    try { parsedHost = new URL(this.sourceUrl).hostname; } catch {}
+    const httpHeaders = [];
+    if (this.cookieStr) {
+      httpHeaders.push(`Cookie: ${this.cookieStr}`);
+      console.log(`[castHls] #${this.id} injecting cookie header for ${parsedHost}`);
+    }
+    if (parsedHost) {
+      httpHeaders.push(`Referer: https://${parsedHost}/`);
+      httpHeaders.push(`User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36`);
+    }
+
     const args = [
       "-loglevel", "warning",
       "-reconnect", "1",
       "-reconnect_streamed", "1",
       "-reconnect_delay_max", "5",
+      ...(httpHeaders.length > 0 ? ["-headers", httpHeaders.join("\r\n") + "\r\n"] : []),
       "-i", this.sourceUrl,
       "-c:v", "copy",        // copy video stream — no re-encoding
       "-c:a", "aac",         // transcode audio to AAC stereo (Chromecast requires stereo AAC in TS)
@@ -414,15 +429,16 @@ function rewritePlaylist(playlist, sessionId, localIp, port) {
  * Start the HLS server and a new transcoding session.
  * Returns the master.m3u8 URL that the Chromecast should load.
  *
- * @param {string} localIp   - LAN IP of this machine
- * @param {string} sourceUrl - Original video URL (MP4, etc.)
+ * @param {string} localIp    - LAN IP of this machine
+ * @param {string} sourceUrl  - Original video URL (MP4, HLS, etc.)
+ * @param {string} [cookieStr] - Cookies de sessão para injetar nos requests do ffmpeg
  * @returns {Promise<{ hlsUrl: string, sessionId: string }>}
  */
-async function createHlsSession(localIp, sourceUrl) {
+async function createHlsSession(localIp, sourceUrl, cookieStr) {
   await startHlsServer();
 
   const sessionId = Math.random().toString(36).slice(2) + Date.now().toString(36);
-  const session = new HlsSession(sessionId, sourceUrl, localIp);
+  const session = new HlsSession(sessionId, sourceUrl, localIp, cookieStr);
   _sessions.set(sessionId, session);
   session.start();
 

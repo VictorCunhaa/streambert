@@ -1099,12 +1099,46 @@ export default function TVPage({
       } catch {}
     };
 
+    // ── Superflix: hide embed servers, keep native_media ─────────────────────
+    // Server cards use data-id to identify the server type:
+    //   - "native_media:XXXXX" → direct media file (preferred)
+    //   - purely numeric (e.g. "470038") → external embed player (hidden)
+    // This is robust against the site swapping which name ("Principal" /
+    // "Alternativo") is assigned to each server on a given title.
+    const HIDE_EMBED_SERVER_JS = `
+      (() => {
+        if (window.__sc_serverHidden) return;
+        window.__sc_serverHidden = true;
+        const hide = () => {
+          for (const card of document.querySelectorAll('.server-card, .player_select_item')) {
+            const id = card.getAttribute('data-id') || '';
+            if (id && !id.startsWith('native_media:')) {
+              card.style.setProperty('display', 'none', 'important');
+            }
+          }
+        };
+        hide();
+        const obs = new MutationObserver(hide);
+        obs.observe(document.body, { childList: true, subtree: true });
+        setTimeout(() => obs.disconnect(), 15000);
+      })()
+    `;
+    const doHideServidor = async () => {
+      try { await wv.executeJavaScript(HIDE_EMBED_SERVER_JS); } catch {}
+    };
+
     const onLoadCss = () => {
       if (progressViaFrames) {
         setTimeout(doInjectCss, 1500);
         setTimeout(doInjectCss, 4000);
       } else {
         try { wv.insertCSS(HIDE_CAST_CSS); } catch {}
+      }
+      // Hide secondary server option in Superflix (runs in main frame)
+      if (playerSource === "superflixapi") {
+        setTimeout(doHideServidor, 800);
+        setTimeout(doHideServidor, 2500);
+        setTimeout(doHideServidor, 5000);
       }
     };
     wv.addEventListener("did-finish-load", onLoadCss);

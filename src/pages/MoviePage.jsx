@@ -113,7 +113,11 @@ export default function MoviePage({
   const pipWebContentsIdRef = useRef(null); // cached WebContents ID of the pop-out window
 
   // Cast / Chromecast
-  const [streamUrl, setStreamUrl] = useState(null);
+  // Servidores com MSE demuxado (áudio+vídeo separados) expõem DOIS URLs /m3/.
+  // Guardamos os primeiros 2 distintos para construir um master HLS no proxy.
+  const [streamUrls, setStreamUrls] = useState([]);
+  const streamUrl    = streamUrls[0] || null;  // URL primário (vídeo ou áudio — whatever comes first)
+  const altStreamUrl = streamUrls[1] || null;  // URL secundário (o outro track)
   const [castState, setCastState] = useState("idle");
   const castCurrentTimeRef = useRef(null); // { currentTime, duration } from device during cast
 
@@ -465,6 +469,34 @@ export default function MoviePage({
       } catch {}
     };
 
+    // ── Superflix: hide embed servers, keep native_media ─────────────────────
+    // Server cards use data-id to identify the server type:
+    //   - "native_media:XXXXX" → direct media file (preferred)
+    //   - purely numeric (e.g. "470038") → external embed player (hidden)
+    // This is robust against the site swapping which name ("Principal" /
+    // "Alternativo") is assigned to each server on a given title.
+    const HIDE_EMBED_SERVER_JS = `
+      (() => {
+        if (window.__sc_serverHidden) return;
+        window.__sc_serverHidden = true;
+        const hide = () => {
+          for (const card of document.querySelectorAll('.server-card, .player_select_item')) {
+            const id = card.getAttribute('data-id') || '';
+            if (id && !id.startsWith('native_media:')) {
+              card.style.setProperty('display', 'none', 'important');
+            }
+          }
+        };
+        hide();
+        const obs = new MutationObserver(hide);
+        obs.observe(document.body, { childList: true, subtree: true });
+        setTimeout(() => obs.disconnect(), 15000);
+      })()
+    `;
+    const doHideServidor = async () => {
+      try { await wv.executeJavaScript(HIDE_EMBED_SERVER_JS); } catch {}
+    };
+
     const onLoad = () => {
       if (progressViaFrames) {
         // Inject at 1.5s and again at 4s — the inner player frame loads async
@@ -474,6 +506,12 @@ export default function MoviePage({
       } else {
         // Direct webview — insertCSS works fine
         try { wv.insertCSS(HIDE_CAST_CSS); } catch {}
+      }
+      // Hide secondary server option in Superflix (runs in main frame)
+      if (playerSource === "superflixapi") {
+        setTimeout(doHideServidor, 800);
+        setTimeout(doHideServidor, 2500);
+        setTimeout(doHideServidor, 5000);
       }
     };
     wv.addEventListener("did-finish-load", onLoad);
@@ -514,13 +552,35 @@ export default function MoviePage({
     };
   }, [playing, playerSource, item.id]);
 
-  // ── Capture stream URL for Cast (intercepted by main process) ───────────────
+  // ── Capture stream URL(s) for Cast (intercepted by main process) ────────────
+  // Para servidores com MSE demuxado (ex: xn--kcksk7a2bl5le7b6doc1h3f.com),
+  // o player busca DOIS playlists HLS distintos — um de vídeo e outro de áudio.
+  // Capturamos os primeiros 2 URLs únicos. O proxy os combina num HLS master.
+  // Variantes de qualidade chegam bem depois (troca manual) → limitamos a 2.
   useEffect(() => {
     if (!playing) return;
     if (!window.electron?.onCastStreamUrl) return;
+    setStreamUrls([]); // limpa URLs de sessão anterior ao (re)iniciar
+    let urlCount = 0;
+
     const h = window.electron.onCastStreamUrl((url) => {
-      console.log("[MoviePage] cast:stream-url received:", url);
-      setStreamUrl(url);
+      urlCount++;
+      const host = (() => { try { return new URL(url).hostname; } catch { return "?"; } })();
+
+      setStreamUrls((prev) => {
+        if (prev.includes(url)) {
+          console.log(`[MoviePage] cast:stream-url #${urlCount} ignorada (duplicata): ${host}`);
+          return prev;
+        }
+        if (prev.length >= 2) {
+          console.log(`[MoviePage] cast:stream-url #${urlCount} ignorada (já temos 2 URLs): ${host}`);
+          return prev;
+        }
+        const role = prev.length === 0 ? "primária" : "alternativa";
+        console.log(`[MoviePage] cast:stream-url #${urlCount} ACEITA (${role}): ${host}`);
+        console.log("  URL:", url);
+        return [...prev, url];
+      });
     });
     return () => window.electron.offCastStreamUrl?.(h);
   }, [playing]);
@@ -873,7 +933,7 @@ export default function MoviePage({
                 ))}
               <button className="btn btn-secondary" onClick={onSave}>
                 {isSaved ? <BookmarkFillIcon /> : <BookmarkIcon />}
-                {isSaved ? "Saved" : "Save"}
+                {isSaved ? "Salvo" : "Salvar"}
               </button>
               {!isUnreleased &&
                 (isWatched ? (
@@ -881,7 +941,7 @@ export default function MoviePage({
                     className="btn btn-ghost watched-btn"
                     onClick={() => onMarkUnwatched?.(progressKey)}
                   >
-                    <WatchedIcon size={16} /> Watched
+                    <WatchedIcon size={16} /> Assistido
                   </button>
                 ) : (
                   <>
@@ -906,7 +966,7 @@ export default function MoviePage({
                   </>
                 ))}
               <button className="btn btn-ghost" onClick={onBack}>
-                <BackIcon /> Back
+                <BackIcon /> Voltar
               </button>
             </div>
           </div>
@@ -1124,6 +1184,7 @@ export default function MoviePage({
                 {/* Cast / Chromecast / DLNA button */}
                 <CastButton
                   streamUrl={streamUrl}
+                  altStreamUrl={altStreamUrl}
                   onCastChange={setCastState}
                   onTimeUpdate={(data) => { castCurrentTimeRef.current = data; }}
                 />

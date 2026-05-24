@@ -103,16 +103,32 @@ const BLOCKED_HOSTS = [
 let mainWindow = null;
 const getMainWindow = () => mainWindow;
 
+let _playerSession = null; // referência à session do player, preenchida no primeiro webview attach
+
 const playerWcIds = new Set();
 let sessionsConfigured = false;
 
+// Retorna a string de cookies do player session para uma URL.
+// Usado pelo cast para injetar cookies do browser no proxy/ffmpeg.
+async function getPlayerCookies(url) {
+  if (!_playerSession) return "";
+  try {
+    const cookies = await _playerSession.cookies.get({ url });
+    const str = cookies.map((c) => `${c.name}=${c.value}`).join("; ");
+    if (str) console.log(`[index] cookies do player para ${new URL(url).hostname}: ${str.slice(0, 120)}${str.length > 120 ? "…" : ""}`);
+    return str;
+  } catch {
+    return "";
+  }
+}
+
 function setupSession(playerSession, trailerSession) {
+  const STRIP_LOWER = new Set(["x-frame-options", "content-security-policy"]);
+
   const stripHeaders = (details, callback) => {
     const headers = { ...details.responseHeaders };
     for (const key of Object.keys(headers)) {
-      const lower = key.toLowerCase();
-      if (lower === "x-frame-options" || lower === "content-security-policy")
-        delete headers[key];
+      if (STRIP_LOWER.has(key.toLowerCase())) delete headers[key];
     }
     callback({ responseHeaders: headers });
   };
@@ -122,10 +138,48 @@ function setupSession(playerSession, trailerSession) {
   playerSession.setUserAgent(UA);
   trailerSession.setUserAgent(UA);
 
-  playerSession.webRequest.onHeadersReceived(
-    { urls: ["*://*/*"] },
-    stripHeaders,
-  );
+  // Player session: strip headers AND detectar HLS por Content-Type ou padrão de URL.
+  // Alguns servidores (ex: xn--kcksk7a2bl5le7b6doc1h3f.com) servem a playlist HLS
+  // com extensão .txt ou caminhos sem extensão (/m3/…). O onBeforeRequest não consegue
+  // distingui-los só pela URL — aqui verificamos o Content-Type real da resposta.
+  playerSession.webRequest.onHeadersReceived({ urls: ["*://*/*"] }, (details, callback) => {
+    const headers = { ...details.responseHeaders };
+    for (const key of Object.keys(headers)) {
+      if (STRIP_LOWER.has(key.toLowerCase())) delete headers[key];
+    }
+
+    const url = details.url;
+
+    // Já capturado pelo onBeforeRequest — evita duplicata
+    if (!url.includes(".m3u8") && !url.includes(".mp4") && !url.includes(".vtt")) {
+      // 1) Detecta por Content-Type: application/vnd.apple.mpegurl ou x-mpegURL
+      const ctEntry = Object.entries(details.responseHeaders || {})
+        .find(([k]) => k.toLowerCase() === "content-type");
+      const ctStr = (Array.isArray(ctEntry?.[1]) ? ctEntry[1][0] : ctEntry?.[1] || "").toLowerCase();
+      const isHlsByContentType = /mpegurl/i.test(ctStr);
+
+      // 2) Detecta URLs /m3/{token} — playlists HLS com caminho obfuscado.
+      //    NÃO capturamos mais master.txt (/cdn/hls/) pois é um manifesto JSON
+      //    proprietário, não um playlist #EXTM3U real.
+      const isHlsByUrl = /\/m3\//i.test(url);
+
+      if (isHlsByContentType || isHlsByUrl) {
+        console.log("[intercept] ✅ HLS alternativo detectado:");
+        console.log("  URL         :", url);
+        console.log("  Content-Type:", ctStr || "(não encontrado)");
+        console.log("  Motivo      :", isHlsByContentType ? "content-type mpegurl" : "caminho /m3/");
+        const mw = getMainWindow();
+        if (mw && !mw.isDestroyed()) {
+          mw.webContents.send("m3u8-found", url);
+          mw.webContents.send("cast:stream-url", url);
+        }
+      }
+    }
+
+    callback({ responseHeaders: headers });
+  });
+
+  // Trailer session: apenas strip, sem detecção de mídia
   trailerSession.webRequest.onHeadersReceived(
     { urls: ["*://*/*"] },
     stripHeaders,
@@ -204,9 +258,17 @@ function setupSession(playerSession, trailerSession) {
       const mw = getMainWindow();
       if (mw && !mw.isDestroyed()) {
         if (url.includes(".m3u8")) {
+          console.log("[intercept] ✅ m3u8 detectado:");
+          console.log("  URL completa :", url);
+          console.log("  Initiator    :", details.initiator || "(desconhecido)");
+          console.log("  Frame URL    :", details.frameUrl || "(desconhecido)");
           mw.webContents.send("m3u8-found", url);
           mw.webContents.send("cast:stream-url", url);
         } else if (url.includes(".mp4")) {
+          console.log("[intercept] ✅ mp4 detectado:");
+          console.log("  URL completa :", url);
+          console.log("  Initiator    :", details.initiator || "(desconhecido)");
+          console.log("  Frame URL    :", details.frameUrl || "(desconhecido)");
           mw.webContents.send("cast:stream-url", url);
         } else if (url.includes(".vtt")) {
           const { extractSubtitleLang } = require("./src/ipc/subtitles");
@@ -219,6 +281,22 @@ function setupSession(playerSession, trailerSession) {
       callback({});
     },
   );
+
+  // ── DEBUG: loga TODAS as requisições do player que não foram bloqueadas ─────
+  // Ignora recursos estáticos (imagens, fontes, scripts pequenos) para focar
+  // em URLs que possam ser streams de vídeo com formato não-padrão.
+  const DEBUG_IGNORE = /\.(png|jpg|jpeg|gif|webp|svg|ico|woff|woff2|ttf|eot|css|js|json|html|htm)(\?|$)/i;
+  playerSession.webRequest.onCompleted({ urls: ["*://*/*"] }, (details) => {
+    const { url, statusCode, resourceType } = details;
+    // Pula recursos claramente não-mídia
+    if (DEBUG_IGNORE.test(url)) return;
+    if (resourceType === "image" || resourceType === "stylesheet" || resourceType === "script") return;
+    // Pula recursos já tratados pelo interceptor anterior
+    if (url.includes(".m3u8") || url.includes(".mp4") || url.includes(".vtt")) return;
+    // Pula URLs de análise/tracking que passaram pelo bloqueio
+    if (url.includes("google") || url.includes("analytics") || url.includes("gtm")) return;
+    console.log(`[debug-net] ${statusCode} [${resourceType || "?"}] ${url}`);
+  });
 
   // YouTube consent cookie → suppress consent gate in both sessions
   const ytCookie = {
@@ -283,9 +361,9 @@ function createWindow() {
   mainWindow.webContents.on("did-attach-webview", (_, wc) => {
     if (!sessionsConfigured) {
       sessionsConfigured = true;
-      const playerSession = session.fromPartition("persist:player");
+      _playerSession = session.fromPartition("persist:player");
       const trailerSession = session.fromPartition("persist:trailer");
-      setupSession(playerSession, trailerSession);
+      setupSession(_playerSession, trailerSession);
     }
 
     // Track player webviews for cleanup on player-stopped
@@ -354,7 +432,7 @@ allmangaIpc.register();
 playerIpc.register(getMainWindow, {
   writeSecretMigration: storageIpc.writeSecretMigration,
 });
-castIpc.register(getMainWindow);
+castIpc.register(getMainWindow, getPlayerCookies);
 blockStats.init(getMainWindow);
 
 // get-block-stats lives with its data
